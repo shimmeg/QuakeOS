@@ -190,6 +190,7 @@ struct SettingsRootView: View {
         case .prebuilt(.music):     MusicPanelView()
         case .prebuilt(.monitor):   SystemMonitorPanelView()
         case .prebuilt(.clock):     ClockPageView(pageName: "Clock")
+        case .prebuilt(.browser):   BrowserPanelView(pageName: "Browser")
         case .section(let s):
             switch s {
             case .general:  GeneralSettingsView()

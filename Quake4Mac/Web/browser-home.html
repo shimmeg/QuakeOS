@@ -26,25 +26,23 @@
     <div class="grid" id="grid"></div>
   </div>
 <script>
-  var sites=[
-    ["Google","https://www.google.com"],
-    ["YouTube","https://www.youtube.com"],
-    ["Wikipedia","https://www.wikipedia.org"],
-    ["Reddit","https://www.reddit.com"],
-    ["GitHub","https://github.com"],
-    ["Maps","https://www.google.com/maps"],
-    ["News","https://news.google.com"],
-    ["Weather","https://weather.com"],
-    ["Hacker News","https://news.ycombinator.com"],
-    ["Amazon","https://www.amazon.com"],
-    ["Spotify","https://open.spotify.com"],
-    ["Twitch","https://www.twitch.tv"]
+  var defaults=[
+    {name:"Google",url:"https://www.google.com"},{name:"YouTube",url:"https://www.youtube.com"},
+    {name:"Wikipedia",url:"https://www.wikipedia.org"},{name:"Reddit",url:"https://www.reddit.com"},
+    {name:"GitHub",url:"https://github.com"},{name:"Maps",url:"https://www.google.com/maps"},
+    {name:"News",url:"https://news.google.com"},{name:"Weather",url:"https://weather.com"},
+    {name:"Hacker News",url:"https://news.ycombinator.com"},{name:"Amazon",url:"https://www.amazon.com"},
+    {name:"Spotify",url:"https://open.spotify.com"},{name:"Twitch",url:"https://www.twitch.tv"}
   ];
   function host(u){ try{ return new URL(u).hostname; }catch(e){ return u; } }
-  document.getElementById('grid').innerHTML = sites.map(function(s){
-    var fav='https://www.google.com/s2/favicons?domain='+host(s[1])+'&sz=128';
-    return '<a class="tile" href="'+s[1]+'"><div class="ic"><img src="'+fav+'" alt=""></div><div class="nm">'+s[0]+'</div></a>';
-  }).join('');
+  function render(sites){
+    document.getElementById('grid').innerHTML = (sites||[]).map(function(s){
+      var fav='https://www.google.com/s2/favicons?domain='+host(s.url)+'&sz=128';
+      return '<a class="tile" href="'+s.url+'"><div class="ic"><img src="'+fav+'" alt=""></div><div class="nm">'+s.name+'</div></a>';
+    }).join('');
+  }
+  window.__setBookmarks = function(list){ render(list && list.length ? list : defaults); };
+  render(defaults);   // shown until Swift injects the user's list
 </script>
 </body>
 </html>
