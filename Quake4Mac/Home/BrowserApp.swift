@@ -11,7 +11,13 @@ import WebKit
 
 final class BrowserController: ObservableObject {
     @Published var address: String = ""
+    @Published var focusTick = 0       // bumped to request the address bar take keyboard focus
     weak var web: WKWebView?
+
+    /// Make the panel window the key window so the Mac keyboard types here.
+    func makeKey() { web?.window?.makeKey() }
+    /// Focus the address bar (touch can't focus native fields on its own).
+    func focusAddress() { makeKey(); focusTick += 1 }
 
     var homeURL: URL? { Bundle.main.url(forResource: "browser-home", withExtension: "html", subdirectory: "Web") }
 
@@ -42,6 +48,7 @@ final class BrowserController: ObservableObject {
 
 struct BrowserAppView: View {
     @StateObject private var ctrl = BrowserController()
+    @FocusState private var addrFocused: Bool
     static let toolbarFrac: CGFloat = 0.14
 
     var body: some View {
@@ -64,7 +71,9 @@ struct BrowserAppView: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, 16).padding(.vertical, 8)
                 .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.08)))
-                .onSubmit { ctrl.go(ctrl.address) }
+                .focused($addrFocused)
+                .onSubmit { ctrl.go(ctrl.address); addrFocused = false }
+                .onChange(of: ctrl.focusTick) { _ in addrFocused = true }
             Button(action: ctrl.reload) { Image(systemName: "arrow.clockwise") }.buttonStyle(.plain)
         }
         .font(.system(size: 30, weight: .semibold))
@@ -89,10 +98,13 @@ struct BrowserWebView: NSViewRepresentable {
           var el = document.elementFromPoint(x, y); if(!el) return;
           var a = el.closest && el.closest('a[href]');
           if(a && a.href){ window.location.href = a.href; return; }
-          if(el.focus) el.focus();
           ['mousedown','mouseup','click'].forEach(function(t){
-            el.dispatchEvent(new MouseEvent(t,{bubbles:true,cancelable:true,clientX:x,clientY:y,view:window}));
+            try{ el.dispatchEvent(new MouseEvent(t,{bubbles:true,cancelable:true,clientX:x,clientY:y,view:window})); }catch(e){}
           });
+          var f = el.closest && el.closest('input,textarea,select,[contenteditable]');
+          if(f && f.getAttribute && f.getAttribute('contenteditable') === 'false') f = null;
+          if(!f && el.matches && el.matches('input,textarea,select')) f = el;
+          if(f && f.focus){ try{ f.focus(); }catch(e){} }
         };
         window.__quakeScroll = function(dx, dy){ window.scrollBy(dx, dy); };
         """
@@ -137,8 +149,12 @@ struct BrowserWebView: NSViewRepresentable {
             guard let s = start, let e = last, let web = ctrl.web else { return }
             guard max(abs(e.x - s.x), abs(e.y - s.y)) < 0.02 else { return }   // drag, not tap
             if s.y < toolbarFrac {
-                if s.x < 0.08 { ctrl.back() } else if s.x < 0.16 { ctrl.loadHome() } else if s.x > 0.92 { ctrl.reload() }
+                if s.x < 0.08 { ctrl.back() }
+                else if s.x < 0.16 { ctrl.loadHome() }
+                else if s.x > 0.92 { ctrl.reload() }
+                else { ctrl.focusAddress() }                 // tap the address bar → focus + keyboard
             } else {
+                ctrl.makeKey()                               // so typing into web fields reaches them
                 let ny = (s.y - toolbarFrac) / (1 - toolbarFrac)
                 web.evaluateJavaScript("window.__quakeTap && window.__quakeTap(\(s.x), \(ny));", completionHandler: nil)
             }
