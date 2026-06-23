@@ -114,6 +114,7 @@ struct BrowserWebView: NSViewRepresentable {
         let web = WKWebView(frame: .zero, configuration: cfg)
         web.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
         web.navigationDelegate = context.coordinator
+        web.uiDelegate = context.coordinator
         ctrl.web = web
         ctrl.loadHome()
 
@@ -130,7 +131,7 @@ struct BrowserWebView: NSViewRepresentable {
         ScreenTouchRouter.shared.release(owner: coordinator)
     }
 
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         let ctrl: BrowserController
         let toolbarFrac: CGFloat
         private var start: CGPoint?
@@ -162,5 +163,14 @@ struct BrowserWebView: NSViewRepresentable {
 
         func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) { ctrl.updateAddress() }
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { ctrl.updateAddress() }
+
+        // Open popups / target=_blank links in the same web view (we have no separate window).
+        func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
+                     for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+            if navigationAction.targetFrame == nil, navigationAction.request.url != nil {
+                webView.load(navigationAction.request)
+            }
+            return nil
+        }
     }
 }
