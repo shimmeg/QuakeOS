@@ -97,6 +97,7 @@ struct WeatherPanelView: View {
     @State private var query = ""
     @State private var results: [GeoResult] = []
     @State private var searching = false
+    @State private var searchTask: Task<Void, Never>?
     private let columns = [GridItem(.adaptive(minimum: 320, maximum: 480), spacing: 16, alignment: .top)]
 
     var body: some View {
@@ -123,8 +124,8 @@ struct WeatherPanelView: View {
                             .padding(.horizontal, 10).padding(.vertical, 7)
                             .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(0.04)))
                             .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NeonTheme.stroke, lineWidth: 1))
-                            .onSubmit { runSearch() }
-                        Button("Search") { runSearch() }.buttonStyle(.plain).foregroundColor(NeonTheme.cyan)
+                            .onChange(of: query) { _ in scheduleSearch() }
+                        if searching { ProgressView().scaleEffect(0.6).frame(width: 16, height: 16) }
                     }
                     if searching { Text("Searching…").font(.system(size: 11)).foregroundColor(NeonTheme.textTertiary) }
                     ForEach(results) { r in
@@ -149,11 +150,16 @@ struct WeatherPanelView: View {
         }
     }
 
-    private func runSearch() {
-        let q = query
+    private func scheduleSearch() {
+        searchTask?.cancel()
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard q.count >= 2 else { results = []; searching = false; return }
         searching = true
-        Task {
+        searchTask = Task {
+            try? await Task.sleep(nanoseconds: 280_000_000)        // debounce keystrokes
+            if Task.isCancelled { return }
             let r = await GeoSearch.search(q)
+            if Task.isCancelled { return }
             await MainActor.run { results = r; searching = false }
         }
     }
