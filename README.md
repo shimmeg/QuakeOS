@@ -1,6 +1,6 @@
 # Quake4Mac
 
-A native macOS app for the **DK‑QUAKE / ARIS‑68** — the ultra‑wide (1920×480) HDMI touchscreen + rotary knob with an RGB LED ring. Quake4Mac is an independent, open replacement for the vendor's DK‑Suite software, built in Swift / SwiftUI.
+A personal, macOS-first native app for the **DK‑QUAKE / ARIS‑68** — the ultra‑wide (1920×480) HDMI touchscreen + rotary knob with an RGB LED ring. Quake4Mac is an independent, open replacement for the vendor's DK‑Suite software, built in Swift / SwiftUI/AppKit.
 
 > **Unofficial project.** Not affiliated with, endorsed by, or supported by DecoKee, MatrixZero, or TeeJS. "DK‑QUAKE", "ARIS‑68", and "DK‑Suite" are referenced for compatibility only.
 
@@ -29,7 +29,7 @@ A native macOS app for the **DK‑QUAKE / ARIS‑68** — the ultra‑wide (1920
 
 ```bash
 git clone <your-repo-url>
-cd Quake4Mac
+cd QuakeOS
 open Quake4Mac.xcodeproj
 ```
 
@@ -38,8 +38,10 @@ In Xcode: select the **Quake4Mac** scheme and press **⌘R** (Run).
 Or from the command line:
 
 ```bash
-xcodebuild -scheme Quake4Mac -configuration Debug -destination 'platform=macOS' build
+xcodebuild -project Quake4Mac.xcodeproj -scheme Quake4Mac -configuration Debug -destination 'platform=macOS' -derivedDataPath /tmp/quakeos-derived CODE_SIGNING_ALLOWED=NO build
 ```
+
+The local command-line build is unsigned and does not require an Apple Developer account or Development Team ID. Release builds have hardened runtime enabled, but Developer ID signing/notarization are intentionally left for a later distribution step.
 
 Plug in the DK‑QUAKE — the app auto‑detects the panel by name/size, pins its UI to it, and starts reading the knob/touch over USB‑HID. The settings window opens on your regular monitor.
 
@@ -53,6 +55,18 @@ You may be prompted to grant permissions depending on which features you use (e.
 - Configure everything (pages, tiles, clocks, wallpaper, lighting, launch behavior) from the **Mac‑side settings window**.
 
 Your settings are stored locally on your Mac (`~/Library/Preferences/com.quake4mac.app.plist` and `~/Library/Application Support/Quake4Mac/`) — they are **not** part of this repository, so cloning gives everyone a clean default setup.
+
+## Security posture
+
+- Spotify refresh tokens are stored in the macOS Keychain; non-secret preferences remain in `UserDefaults`.
+- Shell and AppleScript macro tiles are disabled by default and must be enabled in Settings because shared page configs are executable content.
+- URL-opening tiles and web dashboards accept only `http` and `https` URLs.
+- Bundled web panels do not load remote executable scripts/styles; remote data APIs are still used by network-backed panels.
+- Device debug actions that write to HID/VIA lighting interfaces are hidden behind Developer Mode and never run automatically.
+- Private thermal sensor reads are disabled by default and can be enabled explicitly under Developer Mode.
+- DFU, bootloader, firmware flashing, and device smoke tests require explicit user approval and are not part of normal development.
+
+See [`docs/security-hardening.md`](docs/security-hardening.md) for the current hardening notes.
 
 ## Credits
 

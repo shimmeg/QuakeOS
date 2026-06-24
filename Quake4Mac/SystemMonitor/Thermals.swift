@@ -19,6 +19,7 @@ import IOKit
 
 final class Thermals {
     static let shared = Thermals()
+    static let privateThermalsEnabledKey = "settings.enablePrivateThermals"
 
     // EXACT C signatures (resolved via dlsym).
     private typealias CreateFn       = @convention(c) (CFAllocator?) -> Unmanaged<AnyObject>?
@@ -41,6 +42,10 @@ final class Thermals {
     private var didSetup = false
 
     private init() {}
+
+    private var privateThermalsEnabled: Bool {
+        UserDefaults.standard.bool(forKey: Self.privateThermalsEnabledKey)
+    }
 
     private func sym<T>(_ h: UnsafeMutableRawPointer?, _ name: String, _ t: T.Type) -> T? {
         guard let h = h, let p = dlsym(h, name) else { return nil }
@@ -85,10 +90,17 @@ final class Thermals {
     }
 
     // CPU/SoC die temperature. M3/M-series: "PMU tdie"; M1/M2: "pACC"/"eACC"; Intel: "TC0".
-    func cpuTemp() -> Double? { temperature(["PMU tdie", "pACC", "eACC", "TC0", "CPU"]) }
+    func cpuTemp() -> Double? {
+        guard privateThermalsEnabled else { return nil }
+        return temperature(["PMU tdie", "pACC", "eACC", "TC0", "CPU"])
+    }
+
     // No distinct GPU sensor is exposed by name on M3 Max; the cooler "PMU tdev" device
     // sensors track the GPU/peripheral side of the die. (Falls back to other-arch names.)
-    func gpuTemp() -> Double? { temperature(["PMU tdev", "GPU", "TG0", "PMU tgpu"]) }
+    func gpuTemp() -> Double? {
+        guard privateThermalsEnabled else { return nil }
+        return temperature(["PMU tdev", "GPU", "TG0", "PMU tgpu"])
+    }
 
     // MARK: GPU utilisation (0…1) from the accelerator's PerformanceStatistics (public API)
     func gpuUtilization() -> Double? {

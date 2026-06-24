@@ -64,7 +64,10 @@ struct ScreenWebView: NSViewRepresentable {
             NSLog("[Quake] ScreenWebView: didFailProvisional — \(error.localizedDescription)")
         }
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
-            NSLog("[Quake] ScreenWebView: *** WebContent process TERMINATED (crash) ***")
+            NSLog("[Quake] ScreenWebView: WebContent process terminated; reloading")
+            loaded = false
+            enhanced = false
+            webView.reload()
         }
 
         /// For openURL tiles, fetch the site's brand favicon and swap it in (full colour + glow-tinted rim).

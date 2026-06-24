@@ -166,21 +166,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let newSettings = NSMenuItem(title: "Settings (new design)…", action: #selector(openSettingsNewAction), keyEquivalent: "")
         newSettings.target = self
         menu.addItem(newSettings)
-        let rgbTest = NSMenuItem(title: "Test RGB Ring", action: #selector(testRGBMenuAction), keyEquivalent: "")
-        rgbTest.target = self
-        menu.addItem(rgbTest)
-        let rgbProbe = NSMenuItem(title: "Probe RGB Capability", action: #selector(probeRGBMenuAction), keyEquivalent: "")
-        rgbProbe.target = self
-        menu.addItem(rgbProbe)
-        let rgbTour = NSMenuItem(title: "Tour RGB Effects", action: #selector(tourRGBMenuAction), keyEquivalent: "")
-        rgbTour.target = self
-        menu.addItem(rgbTour)
-        let rgbBrowse = NSMenuItem(title: "Browse RGB Effects (knob)", action: #selector(browseRGBMenuAction), keyEquivalent: "")
-        rgbBrowse.target = self
-        menu.addItem(rgbBrowse)
-        let cpuSweep = NSMenuItem(title: "Simulate CPU Heat Sweep", action: #selector(cpuSweepMenuAction), keyEquivalent: "")
-        cpuSweep.target = self
-        menu.addItem(cpuSweep)
+        if UserDefaults.standard.bool(forKey: "settings.developerMode") {
+            menu.addItem(.separator())
+            let debugMenu = NSMenu()
+            let rgbTest = NSMenuItem(title: "Test RGB Ring", action: #selector(testRGBMenuAction), keyEquivalent: "")
+            rgbTest.target = self
+            debugMenu.addItem(rgbTest)
+            let rgbProbe = NSMenuItem(title: "Probe RGB Capability", action: #selector(probeRGBMenuAction), keyEquivalent: "")
+            rgbProbe.target = self
+            debugMenu.addItem(rgbProbe)
+            let rgbTour = NSMenuItem(title: "Tour RGB Effects", action: #selector(tourRGBMenuAction), keyEquivalent: "")
+            rgbTour.target = self
+            debugMenu.addItem(rgbTour)
+            let rgbBrowse = NSMenuItem(title: "Browse RGB Effects (knob)", action: #selector(browseRGBMenuAction), keyEquivalent: "")
+            rgbBrowse.target = self
+            debugMenu.addItem(rgbBrowse)
+            let cpuSweep = NSMenuItem(title: "Simulate CPU Heat Sweep", action: #selector(cpuSweepMenuAction), keyEquivalent: "")
+            cpuSweep.target = self
+            debugMenu.addItem(cpuSweep)
+            let debug = NSMenuItem(title: "Developer Device Actions", action: nil, keyEquivalent: "")
+            debug.submenu = debugMenu
+            menu.addItem(debug)
+        }
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Quake4Mac", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         item.menu = menu
@@ -189,11 +196,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openSettingsMenuAction() { openSettings() }
     @objc private func openSettingsNewAction() { openSettingsNew() }
-    @objc private func testRGBMenuAction() { state.input.rgbSelfTest() }
-    @objc private func probeRGBMenuAction() { state.input.rgbProbe() }
-    @objc private func tourRGBMenuAction() { state.input.rgbEffectTour() }
-    @objc private func browseRGBMenuAction() { state.input.rgbBrowseStart() }
-    @objc private func cpuSweepMenuAction() { RGBReactiveEngine.shared.simulateCPUSweep() }
+    @objc private func testRGBMenuAction() { guardDeveloperMode { state.input.rgbSelfTest() } }
+    @objc private func probeRGBMenuAction() { guardDeveloperMode { state.input.rgbProbe() } }
+    @objc private func tourRGBMenuAction() { guardDeveloperMode { state.input.rgbEffectTour() } }
+    @objc private func browseRGBMenuAction() { guardDeveloperMode { state.input.rgbBrowseStart() } }
+    @objc private func cpuSweepMenuAction() { guardDeveloperMode { RGBReactiveEngine.shared.simulateCPUSweep() } }
+
+    private func guardDeveloperMode(_ action: () -> Void) {
+        guard UserDefaults.standard.bool(forKey: "settings.developerMode") else {
+            log("developer device action blocked: enable Developer Mode first")
+            return
+        }
+        action()
+    }
 
     private var sleepAssertion: IOPMAssertionID = 0
     private func preventDisplaySleep() {

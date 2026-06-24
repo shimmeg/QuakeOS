@@ -84,19 +84,38 @@ final class PadModel: ObservableObject {
 
     init(input: QuakeInputReader) {
         self.input = input
-        storeSub = PadStore.shared.$pages.sink { [weak self] _ in self?.objectWillChange.send() }
+        storeSub = PadStore.shared.$pages.sink { [weak self] _ in
+            self?.normalizePageIndex()
+            self?.objectWillChange.send()
+        }
         applyStartup()
     }
 
-    var current: PadPage { pages[min(pageIndex, pages.count - 1)] }
+    private var safePageIndex: Int {
+        min(max(0, pageIndex), max(0, screenCount - 1))
+    }
+
+    private func normalizePageIndex() {
+        let clamped = safePageIndex
+        if pageIndex != clamped { pageIndex = clamped }
+    }
+
+    var current: PadPage {
+        let source = pages.isEmpty ? PadModel.defaultPages() : pages
+        return source[min(max(0, safePageIndex), source.count - 1)]
+    }
 
     // Screens = the tile pages, then trailing "extra" widget screens (built-in panels).
     enum Extra: Equatable { case monitor, music, clock, weather }
     let extras: [Extra] = [.monitor, .music, .clock, .weather]
 
     var screenCount: Int { pages.count + extras.count }
-    var isTilePage: Bool { pageIndex < pages.count }
-    var extra: Extra? { isTilePage ? nil : extras[pageIndex - pages.count] }
+    var isTilePage: Bool { safePageIndex < pages.count }
+    var extra: Extra? {
+        guard !isTilePage else { return nil }
+        let i = safePageIndex - pages.count
+        return extras.indices.contains(i) ? extras[i] : nil
+    }
 
     /// The kind of the current screen (grid for the trailing extras).
     var currentKind: PadPageKind { isTilePage ? current.kind : .grid }
@@ -301,7 +320,7 @@ final class PadModel: ObservableObject {
     var currentScreenTitle: String {
         if onHome { return "Home" }
         let t = screenTitles
-        return t[min(max(0, pageIndex), t.count - 1)]
+        return t[min(max(0, safePageIndex), t.count - 1)]
     }
 
     // Retained for the (currently unused) radial-switcher overlay; the knob now drives Home/app nav.
@@ -358,58 +377,15 @@ final class PadModel: ObservableObject {
     // MARK: Action execution
 
     private func run(_ a: PadAction) {
-        switch a {
-        case .launchApp(let bid):
-            if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bid) {
-                log("launch app \(bid)")
-                NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
-            } else {
-                log("launch app failed: \(bid) not found")
-            }
-        case .openURL(let s):
-            if let u = URL(string: s) {
-                log("open URL")
-                NSWorkspace.shared.open(u)
-            } else {
-                log("open URL failed: invalid URL")
-            }
-        case .shell(let c):
-            runProcess("/bin/zsh", arguments: ["-lc", c], label: "shell")
-        case .appleScript(let src):
-            runProcess("/usr/bin/osascript", arguments: ["-e", src], label: "applescript")
-        case .luminance(let d):
-            input.setLuminance(input.luminance + d)
-        case .openPage(let name):
-            if let i = pages.firstIndex(where: { $0.name == name }) { pageIndex = i }
-        case .none:
-            log("tile action skipped: no action assigned")
-        }
-    }
-
-    private func runProcess(_ executable: String, arguments: [String], label: String) {
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: executable)
-        p.arguments = arguments
-        let err = Pipe()
-        p.standardError = err
-        p.terminationHandler = { [weak self] proc in
-            let data = err.fileHandleForReading.readDataToEndOfFile()
-            let detail = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-            DispatchQueue.main.async {
-                if proc.terminationStatus == 0 {
-                    self?.log("\(label) OK")
-                } else if detail.isEmpty {
-                    self?.log("\(label) failed with status \(proc.terminationStatus)")
-                } else {
-                    self?.log("\(label) failed with status \(proc.terminationStatus): \(detail)")
-                }
-            }
-        }
-        do {
-            try p.run()
-        } catch {
-            log("\(label) launch failed: \(error.localizedDescription)")
-        }
+        MacroActionExecutor.execute(
+            a,
+            input: input,
+            openPage: { [weak self] name in
+                guard let self else { return }
+                if let i = pages.firstIndex(where: { $0.name == name }) { pageIndex = i }
+            },
+            log: { [weak self] message in self?.log(message) }
+        )
     }
 
     private func log(_ s: String) {
@@ -525,16 +501,15 @@ final class PadStore: ObservableObject {
     @Published var version = 0
 
     private init() {
-        pages = PadStore.load() ?? PadModel.defaultPages()
-        // Clock moved to a built-in panel — strip any old Clock page seeded into pages.json.
-        let before = pages.count
-        pages.removeAll { if case .app("clock") = $0.kind { return true }; return false }
-        if pages.count != before { save() }
+        let loaded = PadStore.load() ?? PadModel.defaultPages()
+        let normalized = PadStore.normalizedPages(loaded)
+        pages = normalized
+        if normalized.count != loaded.count || loaded.isEmpty { save() }
     }
 
     /// Commit a whole new set of pages (the editor's saved draft) → device + disk.
     func replace(_ newPages: [PadPage]) {
-        pages = newPages
+        pages = PadStore.normalizedPages(newPages)
         version += 1
         save()
     }
@@ -575,6 +550,13 @@ final class PadStore: ObservableObject {
         guard let data = try? Data(contentsOf: fileURL),
               let dto = try? JSONDecoder().decode([PageDTO].self, from: data) else { return nil }
         return dto.map { $0.toPage() }
+    }
+
+    private static func normalizedPages(_ input: [PadPage]) -> [PadPage] {
+        var out = input
+        // Clock moved to a built-in panel — strip any old Clock page seeded into pages.json.
+        out.removeAll { if case .app("clock") = $0.kind { return true }; return false }
+        return out.isEmpty ? PadModel.defaultPages() : out
     }
 }
 

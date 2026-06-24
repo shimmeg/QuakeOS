@@ -47,12 +47,15 @@ final class SystemStats: ObservableObject {
     @Published var topRAM: [StorageCat] = []     // processes using the most memory (name + bytes)
     private var tick = 0
     private var procBusy = false
+    private var storageBusy = false
+    private var bluetoothBusy = false
 
     private var prev: (user: UInt32, sys: UInt32, idle: UInt32, nice: UInt32)?
     private var prevNet: (rx: UInt64, tx: UInt64, t: Date)?
     private var timer: Timer?
 
     func start() {
+        guard timer == nil else { return }
         memTotal = Double(ProcessInfo.processInfo.physicalMemory)
         sample()
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in self?.sample() }
@@ -82,8 +85,14 @@ final class SystemStats: ObservableObject {
         if let b = readBattery() { hasBattery = true; battLevel = b.level; battCharging = b.charging }
         else { hasBattery = false }
         disks = readDisks()
-        if tick % 60 == 0 { DispatchQueue.global(qos: .utility).async { [weak self] in self?.computeStorage() } }
-        if tick % 30 == 0 { DispatchQueue.global(qos: .utility).async { [weak self] in self?.computeBluetooth() } }
+        if tick % 60 == 0, !storageBusy {
+            storageBusy = true
+            DispatchQueue.global(qos: .utility).async { [weak self] in self?.computeStorage() }
+        }
+        if tick % 30 == 0, !bluetoothBusy {
+            bluetoothBusy = true
+            DispatchQueue.global(qos: .utility).async { [weak self] in self?.computeBluetooth() }
+        }
         tick += 1
     }
 
@@ -145,6 +154,7 @@ final class SystemStats: ObservableObject {
         DispatchQueue.main.async { [weak self] in
             self?.storageTotal = total
             self?.storageCats = result
+            self?.storageBusy = false
         }
     }
 
@@ -155,7 +165,10 @@ final class SystemStats: ObservableObject {
         p.executableURL = URL(fileURLWithPath: "/usr/sbin/system_profiler")
         p.arguments = ["SPBluetoothDataType", "-json"]
         let out = Pipe(); p.standardOutput = out; p.standardError = Pipe()
-        guard (try? p.run()) != nil else { return }
+        guard (try? p.run()) != nil else {
+            DispatchQueue.main.async { [weak self] in self?.bluetoothBusy = false }
+            return
+        }
         let data = out.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()
         var names: [String] = []
@@ -170,7 +183,10 @@ final class SystemStats: ObservableObject {
         // Same device can appear under multiple controller entries (e.g. AirPods) — dedupe.
         var seen = Set<String>()
         let unique = names.filter { seen.insert($0).inserted }
-        DispatchQueue.main.async { [weak self] in self?.bt = unique }
+        DispatchQueue.main.async { [weak self] in
+            self?.bt = unique
+            self?.bluetoothBusy = false
+        }
     }
 
     // MARK: process states + top-RAM (via `ps`, off the main thread)

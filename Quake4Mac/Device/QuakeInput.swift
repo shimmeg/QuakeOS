@@ -91,9 +91,13 @@ final class QuakeInputReader: ObservableObject {
     var onEvent: ((QuakeEvent) -> Void)?
 
     private var manager: IOHIDManager?
-    private var buffers: [UnsafeMutablePointer<UInt8>] = []
-    private var tags: [DeviceTag] = []
-    private var openDevices: [(kind: QuakeDeviceKind, device: IOHIDDevice)] = []
+    private struct OpenDevice {
+        let kind: QuakeDeviceKind
+        let device: IOHIDDevice
+        let buffer: UnsafeMutablePointer<UInt8>
+        let tag: DeviceTag
+    }
+    private var openDevices: [OpenDevice] = []
     // The QMK raw-HID / VIA interface (usagePage 0xFF60, usage 0x61). Confirmed from DK-Suite's
     // own logs: it targets exactly VID 0x4158/PID 0x514B, usagePage 65376, usage 97, interface 2.
     // ALL lighting must go to THIS interface specifically — the knob also exposes a System-Control
@@ -101,6 +105,8 @@ final class QuakeInputReader: ObservableObject {
     private var viaDevice: IOHIDDevice?
     private var wakeAttempted = false
     private var liftWork: DispatchWorkItem?
+    private var sessionResetWork: DispatchWorkItem?
+    private var contactSessionActive = false
     private let reportBufferSize = 64
     private var viaProbing = false
     private var probeQueue: [[UInt8]] = []
@@ -184,10 +190,8 @@ final class QuakeInputReader: ObservableObject {
 
         let buf = UnsafeMutablePointer<UInt8>.allocate(capacity: reportBufferSize)
         buf.initialize(repeating: 0, count: reportBufferSize)
-        buffers.append(buf)
 
         let tag = DeviceTag(kind, self)
-        tags.append(tag)
         let tagPtr = Unmanaged.passUnretained(tag).toOpaque()
 
         IOHIDDeviceRegisterInputReportCallback(device, buf, reportBufferSize, quakeReport, tagPtr)
@@ -196,7 +200,7 @@ final class QuakeInputReader: ObservableObject {
         case .knob:  knobConnected = true
         case .touch: touchConnected = true
         }
-        openDevices.append((kind, device))
+        openDevices.append(OpenDevice(kind: kind, device: device, buffer: buf, tag: tag))
         // Lock onto the VIA raw-HID interface for lighting. This is the ONE interface that
         // accepts QMK lighting commands; everything else under this VID/PID ignores them.
         if usagePage == 0xFF60 && usage == 0x61 {
@@ -218,11 +222,37 @@ final class QuakeInputReader: ObservableObject {
         }
     }
 
-    fileprivate func markRemoved(_ kind: QuakeDeviceKind) {
-        switch kind {
-        case .knob:  knobConnected = false; viaDevice = nil
-        case .touch: touchConnected = false; touchPoint = nil
+    fileprivate func markRemoved(device: IOHIDDevice, kind: QuakeDeviceKind) {
+        detach(device: device)
+        knobConnected = openDevices.contains { $0.kind == .knob }
+        touchConnected = openDevices.contains { $0.kind == .touch }
+        if !touchConnected { touchPoint = nil }
+        if openDevices.isEmpty {
+            wakeAttempted = false
+            stopKeepAlive()
         }
+    }
+
+    private func detach(device: IOHIDDevice) {
+        var removed: [OpenDevice] = []
+        openDevices.removeAll { entry in
+            let match = sameDevice(entry.device, device)
+            if match { removed.append(entry) }
+            return match
+        }
+
+        for entry in removed {
+            if let via = viaDevice, sameDevice(via, entry.device) { viaDevice = nil }
+            IOHIDDeviceRegisterInputReportCallback(entry.device, entry.buffer, 0, nil, nil)
+            IOHIDDeviceClose(entry.device, IOOptionBits(kIOHIDOptionsTypeNone))
+            entry.buffer.deinitialize(count: reportBufferSize)
+            entry.buffer.deallocate()
+        }
+        log("detached \(removed.count) HID interface(s); \(openDevices.count) still open")
+    }
+
+    private func sameDevice(_ lhs: IOHIDDevice, _ rhs: IOHIDDevice) -> Bool {
+        CFEqual(lhs, rhs)
     }
 
     // MARK: Report handling (runs on main run loop)
@@ -285,6 +315,8 @@ final class QuakeInputReader: ObservableObject {
 
         if contact == 0x00 {
             liftWork?.cancel()
+            sessionResetWork?.cancel()
+            contactSessionActive = false
             touchPoint = nil
             emit(.touchEnded)
             lastEvent = "touch ↑"
@@ -293,7 +325,9 @@ final class QuakeInputReader: ObservableObject {
         }
 
         let p = calibration.normalize(panelX: Double(x), panelY: Double(y))
-        let began = (touchPoint == nil)
+        sessionResetWork?.cancel()
+        let began = !contactSessionActive
+        contactSessionActive = true
         touchPoint = p
         emit(began ? .touchBegan(p) : .touchMoved(p))
         lastEvent = String(format: "touch (%d,%d) → (%.2f,%.2f)", x, y, p.x, p.y)
@@ -307,6 +341,12 @@ final class QuakeInputReader: ObservableObject {
             self.touchPoint = nil
             self.emit(.touchEnded)
             self.lastEvent = "touch ↑ (gap)"
+            let reset = DispatchWorkItem { [weak self] in
+                guard let self, self.touchPoint == nil else { return }
+                self.contactSessionActive = false
+            }
+            self.sessionResetWork = reset
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: reset)
         }
         liftWork = w
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: w)
@@ -339,6 +379,12 @@ final class QuakeInputReader: ObservableObject {
             self?.sendPing()
         }
         log("keep-alive started — ping A3 02 02 EF F1 every 10s")
+    }
+
+    private func stopKeepAlive() {
+        keepAliveTimer?.invalidate()
+        keepAliveTimer = nil
+        log("keep-alive stopped — no HID interfaces open")
     }
 
     func sendPing() {
@@ -532,8 +578,8 @@ private let quakeDeviceRemoved: IOHIDDeviceCallback = { context, _, _, device in
     guard let context else { return }
     let reader = Unmanaged<QuakeInputReader>.fromOpaque(context).takeUnretainedValue()
     let vid = (IOHIDDeviceGetProperty(device, kIOHIDVendorIDKey as CFString) as? Int) ?? -1
-    if vid == QuakeIDs.knobVID { reader.markRemoved(.knob) }
-    else if vid == QuakeIDs.touchVID { reader.markRemoved(.touch) }
+    if vid == QuakeIDs.knobVID { reader.markRemoved(device: device, kind: .knob) }
+    else if vid == QuakeIDs.touchVID { reader.markRemoved(device: device, kind: .touch) }
 }
 
 private let quakeReport: IOHIDReportCallback = { context, _, _, _, _, report, reportLength in

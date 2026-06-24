@@ -17,35 +17,72 @@ final class SpotifyAuth: NSObject, ObservableObject {
     static let port: UInt16 = 8765
     static let redirectURI = "http://127.0.0.1:8765/callback"
     static let scopes = "user-read-playback-state user-read-currently-playing user-modify-playback-state playlist-read-private playlist-read-collaborative user-read-recently-played"
+    private static let defaultClientID = "6a6e71c369494e2fa70dd5c1608dd435"
+    private static let clientIDKey = "spotify.clientID"
+    private static let refreshTokenKey = "spotify.refreshToken"
 
     // Pre-filled with our Spotify app Client ID (public, not a secret). A value saved in
     // Settings overrides it.
-    @Published var clientID: String =
-        UserDefaults.standard.string(forKey: "spotify.clientID") ?? "6a6e71c369494e2fa70dd5c1608dd435"
-    @Published var isConnected: Bool = UserDefaults.standard.string(forKey: "spotify.refreshToken") != nil
+    @Published var clientID: String
+    @Published var isConnected: Bool
     @Published var lastError: String = ""
 
+    private let defaults: UserDefaults
+    private let secretStore: SecretStore
     private var accessToken: String?
     private var expiry: Date = .distantPast
     private var verifier: String = ""
     private var listener: NWListener?
 
+    init(defaults: UserDefaults = .standard, secretStore: SecretStore = KeychainStore.shared) {
+        self.defaults = defaults
+        self.secretStore = secretStore
+        clientID = defaults.string(forKey: Self.clientIDKey) ?? Self.defaultClientID
+        isConnected = secretStore.string(forKey: Self.refreshTokenKey) != nil
+            || defaults.string(forKey: Self.refreshTokenKey) != nil
+        super.init()
+        migrateLegacyRefreshToken()
+        isConnected = secretStore.string(forKey: Self.refreshTokenKey) != nil
+    }
+
     private var refreshToken: String? {
-        get { UserDefaults.standard.string(forKey: "spotify.refreshToken") }
+        get { secretStore.string(forKey: Self.refreshTokenKey) }
         set {
-            UserDefaults.standard.set(newValue, forKey: "spotify.refreshToken")
-            DispatchQueue.main.async { self.isConnected = (newValue != nil) }
+            do {
+                try secretStore.setString(newValue, forKey: Self.refreshTokenKey)
+                DispatchQueue.main.async { self.isConnected = (newValue != nil) }
+            } catch {
+                DispatchQueue.main.async {
+                    self.lastError = "Couldn't update Spotify credentials: \(error.localizedDescription)"
+                    self.isConnected = (self.refreshToken != nil)
+                }
+            }
         }
     }
 
     func saveClientID(_ id: String) {
         let trimmed = id.trimmingCharacters(in: .whitespacesAndNewlines)
         clientID = trimmed
-        UserDefaults.standard.set(trimmed, forKey: "spotify.clientID")
+        defaults.set(trimmed, forKey: Self.clientIDKey)
     }
 
     func disconnect() {
         refreshToken = nil; accessToken = nil; expiry = .distantPast
+    }
+
+    private func migrateLegacyRefreshToken() {
+        guard secretStore.string(forKey: Self.refreshTokenKey) == nil,
+              let legacy = defaults.string(forKey: Self.refreshTokenKey),
+              !legacy.isEmpty else {
+            defaults.removeObject(forKey: Self.refreshTokenKey)
+            return
+        }
+        do {
+            try secretStore.setString(legacy, forKey: Self.refreshTokenKey)
+            defaults.removeObject(forKey: Self.refreshTokenKey)
+        } catch {
+            lastError = "Couldn't migrate Spotify credentials: \(error.localizedDescription)"
+        }
     }
 
     // MARK: Login
