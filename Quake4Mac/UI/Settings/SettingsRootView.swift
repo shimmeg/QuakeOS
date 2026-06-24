@@ -194,6 +194,7 @@ struct SettingsRootView: View {
         case .section(let s):
             switch s {
             case .general:  GeneralSettingsView()
+            case .layout:   HomeLayoutView()
             case .rgbRing:  RGBRingView()
             case .reactive: ReactiveLightingView()
             default:        PlaceholderSectionView(section: s)
