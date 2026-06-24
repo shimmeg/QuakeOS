@@ -77,8 +77,8 @@ final class HomeStore: ObservableObject {
     /// Every app available, for the launch-target picker.
     var allApps: [HomeApp] { pages.flatMap { $0 } }
 
-    /// The home app matching a destination (for the app switcher's icon/label).
-    func appFor(_ dest: AppDest) -> HomeApp? { allApps.first { $0.dest == dest } }
+    /// The home app matching a destination (for the app switcher's icon/label); falls back to the catalog.
+    func appFor(_ dest: AppDest) -> HomeApp? { allApps.first { $0.dest == dest } ?? HomeStore.catalog().first { $0.dest == dest } }
 
     // MARK: editing (used by the Mac-side Home Layout editor)
     func addPage() { pages.append([]) }
@@ -110,6 +110,7 @@ final class HomeStore: ObservableObject {
             HomeApp(title: "Settings",  symbol: "gearshape.fill", tint: .gray,   dest: .builtin("settings")),
             HomeApp(title: "Wallpaper", symbol: "photo.fill",     tint: .blue,   dest: .builtin("wallpaper")),
             HomeApp(title: "Browser",   symbol: "globe",          tint: .purple, dest: .builtin("browser")),
+            HomeApp(title: "Weather",   symbol: "cloud.sun.fill", tint: .cyan,   dest: .panel("weather")),
         ]
         for p in PadStore.shared.pages { out.append(HomeApp(title: p.name, symbol: "square.grid.2x2.fill", tint: .teal, dest: .macroPage(p.name))) }
         return out

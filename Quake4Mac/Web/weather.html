@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<!--
+  weather.html — Quake4Mac bundled "Weather" panel.
+  Live weather for the 1920×480 panel: current conditions on the left, a 5-day forecast on the
+  right. Data from Open-Meteo (free, no API key): geocodes the configured city, then fetches the
+  forecast. Swift pushes config via window.WEATHER.set({city, unit}). Original implementation.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1920, initial-scale=1">
+<style>
+  :root{ --bg:#070a0f; --ink:#f3f4f8; --muted:#8b93a3; --accent:#5aa9ff; }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{width:1920px;height:480px;overflow:hidden;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,"SF Pro Display","Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+  .stage{height:100%;display:flex;align-items:center;gap:40px;padding:0 60px;}
+  .now{flex:0 0 640px;display:flex;flex-direction:column;justify-content:center;gap:8px;}
+  .city{font-size:40px;font-weight:700;}
+  .nowMain{display:flex;align-items:center;gap:28px;}
+  .ico{font-size:130px;line-height:1;}
+  .temp{font-size:150px;font-weight:300;line-height:.95;}
+  .cond{font-size:34px;font-weight:600;color:var(--accent);}
+  .meta{font-size:26px;color:var(--muted);display:flex;gap:26px;flex-wrap:wrap;}
+  .sep{width:1px;align-self:stretch;background:rgba(255,255,255,.08);margin:40px 0;}
+  .fc{flex:1;display:flex;align-items:center;justify-content:space-around;gap:14px;}
+  .day{display:flex;flex-direction:column;align-items:center;gap:10px;min-width:0;}
+  .day .d{font-size:28px;font-weight:600;color:var(--muted);}
+  .day .di{font-size:60px;line-height:1;}
+  .day .hi{font-size:34px;font-weight:700;}
+  .day .lo{font-size:28px;color:var(--muted);}
+  .err{font-size:30px;color:var(--muted);}
+</style>
+</head>
+<body>
+  <div class="stage" id="stage"><div class="err" id="msg">Loading weather…</div></div>
+<script>
+(function(){
+  var cfg = { city:"New York", unit:"fahrenheit" };
+  var DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  // WMO weather code → emoji + label
+  function wx(code){
+    var m = {
+      0:['☀️','Clear'],1:['🌤️','Mainly clear'],2:['⛅','Partly cloudy'],3:['☁️','Overcast'],
+      45:['🌫️','Fog'],48:['🌫️','Rime fog'],
+      51:['🌦️','Light drizzle'],53:['🌦️','Drizzle'],55:['🌦️','Dense drizzle'],
+      61:['🌧️','Light rain'],63:['🌧️','Rain'],65:['🌧️','Heavy rain'],
+      66:['🌧️','Freezing rain'],67:['🌧️','Freezing rain'],
+      71:['🌨️','Light snow'],73:['🌨️','Snow'],75:['❄️','Heavy snow'],77:['❄️','Snow grains'],
+      80:['🌦️','Showers'],81:['🌧️','Showers'],82:['⛈️','Violent showers'],
+      85:['🌨️','Snow showers'],86:['🌨️','Snow showers'],
+      95:['⛈️','Thunderstorm'],96:['⛈️','Thunderstorm'],99:['⛈️','Thunderstorm']
+    };
+    return m[code] || ['🌡️','—'];
+  }
+  function deg(){ return cfg.unit==='fahrenheit' ? '°F' : '°C'; }
+  function rnd(n){ return Math.round(n); }
+
+  function show(html){ document.getElementById('stage').innerHTML = html; }
+  function err(t){ show('<div class="err">'+t+'</div>'); }
+
+  async function load(){
+    try{
+      var g = await fetch('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(cfg.city)+'&count=1&language=en&format=json').then(r=>r.json());
+      if(!g.results || !g.results.length){ return err('City not found: '+cfg.city); }
+      var loc = g.results[0];
+      var u = cfg.unit==='fahrenheit' ? 'fahrenheit' : 'celsius';
+      var url='https://api.open-meteo.com/v1/forecast?latitude='+loc.latitude+'&longitude='+loc.longitude
+        +'&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m,apparent_temperature'
+        +'&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=5'
+        +'&temperature_unit='+u+'&wind_speed_unit='+(u==='fahrenheit'?'mph':'kmh');
+      var w = await fetch(url).then(r=>r.json());
+      render(loc, w);
+    }catch(e){ err('Weather unavailable'); }
+  }
+
+  function render(loc, w){
+    var c = w.current, d = w.daily;
+    var cw = wx(c.weather_code);
+    var windU = cfg.unit==='fahrenheit' ? 'mph' : 'km/h';
+    var now =
+      '<div class="now">'+
+        '<div class="city">'+loc.name+(loc.admin1?', '+loc.admin1:'')+'</div>'+
+        '<div class="nowMain"><div class="ico">'+cw[0]+'</div><div class="temp">'+rnd(c.temperature_2m)+'°</div></div>'+
+        '<div class="cond">'+cw[1]+'</div>'+
+        '<div class="meta"><span>Feels '+rnd(c.apparent_temperature)+deg()+'</span>'+
+          '<span>Humidity '+rnd(c.relative_humidity_2m)+'%</span>'+
+          '<span>Wind '+rnd(c.wind_speed_10m)+' '+windU+'</span></div>'+
+      '</div>';
+    var days='';
+    for(var i=0;i<d.time.length;i++){
+      var dt=new Date(d.time[i]+'T00:00:00');
+      var lab = i===0 ? 'Today' : DAYS[dt.getDay()];
+      var dw = wx(d.weather_code[i]);
+      days+='<div class="day"><div class="d">'+lab+'</div><div class="di">'+dw[0]+'</div>'+
+            '<div class="hi">'+rnd(d.temperature_2m_max[i])+'°</div>'+
+            '<div class="lo">'+rnd(d.temperature_2m_min[i])+'°</div></div>';
+    }
+    show(now + '<div class="sep"></div><div class="fc">'+days+'</div>');
+  }
+
+  window.WEATHER = { set:function(o){ if(!o) return; if(o.city) cfg.city=o.city; if(o.unit) cfg.unit=o.unit; load(); } };
+  load();
+  setInterval(load, 10*60*1000);   // refresh every 10 min
+})();
+</script>
+</body>
+</html>

@@ -74,6 +74,8 @@ struct ContentView: View {
                 MusicScreenView().ignoresSafeArea()
             case .clock:
                 ClockScreenView().ignoresSafeArea()
+            case .weather:
+                WeatherScreenView().ignoresSafeArea()
             case .none:
                 switch pad.currentKind {
                 case .grid:                            ScreenWebView(pad: pad).ignoresSafeArea()

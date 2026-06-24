@@ -92,6 +92,10 @@ struct QuakeStripPreview: View {
             ClockScreenView(interactive: false, zoom: scale)
                 .frame(width: stripW, height: stripH)
                 .modifier(StripChrome())
+        } else if pageName == "Weather" {
+            WeatherScreenView(interactive: false, zoom: scale)
+                .frame(width: stripW, height: stripH)
+                .modifier(StripChrome())
         } else if pageName == "Layout" {
             homeEditStrip
         } else {

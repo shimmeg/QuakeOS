@@ -74,18 +74,18 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 
 // Built-in panels listed under the expandable "Prebuilt Panels" row.
 enum PrebuiltPanel: String, CaseIterable, Identifiable {
-    case monitor, music, clock, browser
+    case monitor, music, clock, browser, weather
     var id: String { rawValue }
     var title: String {
         switch self {
         case .monitor: return "System Monitor"; case .music: return "Music"
-        case .clock: return "Clock"; case .browser: return "Browser"
+        case .clock: return "Clock"; case .browser: return "Browser"; case .weather: return "Weather"
         }
     }
     var icon: String {
         switch self {
         case .monitor: return "cpu"; case .music: return "music.note"
-        case .clock: return "clock"; case .browser: return "globe"
+        case .clock: return "clock"; case .browser: return "globe"; case .weather: return "cloud.sun"
         }
     }
 }

@@ -37,6 +37,7 @@
 		AA0000000000000000000069 /* Wallpaper.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000068 /* Wallpaper.swift */; };
 		AA0000000000000000000071 /* BrowserApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000070 /* BrowserApp.swift */; };
 		AA0000000000000000000073 /* SettingsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000072 /* SettingsApp.swift */; };
+		AA0000000000000000000075 /* WeatherScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000074 /* WeatherScreen.swift */; };
 		AA0000000000000000000031 /* SpotifyAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000030 /* SpotifyAuth.swift */; };
 		AA0000000000000000000033 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000032 /* SettingsView.swift */; };
 		AA0000000000000000000035 /* SpotifyClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000034 /* SpotifyClient.swift */; };
@@ -77,6 +78,7 @@
 		AA0000000000000000000068 /* Wallpaper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Wallpaper.swift; sourceTree = "<group>"; };
 		AA0000000000000000000070 /* BrowserApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserApp.swift; sourceTree = "<group>"; };
 		AA0000000000000000000072 /* SettingsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsApp.swift; sourceTree = "<group>"; };
+		AA0000000000000000000074 /* WeatherScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherScreen.swift; sourceTree = "<group>"; };
 		AA0000000000000000000030 /* SpotifyAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyAuth.swift; sourceTree = "<group>"; };
 		AA0000000000000000000032 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		AA0000000000000000000034 /* SpotifyClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyClient.swift; sourceTree = "<group>"; };
@@ -303,6 +305,7 @@
 				AA0000000000000000000068 /* Wallpaper.swift */,
 				AA0000000000000000000070 /* BrowserApp.swift */,
 				AA0000000000000000000072 /* SettingsApp.swift */,
+				AA0000000000000000000074 /* WeatherScreen.swift */,
 			);
 			path = Home;
 			sourceTree = "<group>";
@@ -400,6 +403,7 @@
 				AA0000000000000000000069 /* Wallpaper.swift in Sources */,
 				AA0000000000000000000071 /* BrowserApp.swift in Sources */,
 				AA0000000000000000000073 /* SettingsApp.swift in Sources */,
+				AA0000000000000000000075 /* WeatherScreen.swift in Sources */,
 				AA0000000000000000000031 /* SpotifyAuth.swift in Sources */,
 				AA0000000000000000000033 /* SettingsView.swift in Sources */,
 				AA0000000000000000000035 /* SpotifyClient.swift in Sources */,
