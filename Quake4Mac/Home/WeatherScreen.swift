@@ -103,12 +103,30 @@ final class WeatherWeb: NSObject, WKNavigationDelegate {
     private var scrollMode = false
 
     override init() {
-        web = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        // Real panel size up front so first-paint layout (and the hourly rect) is correct even off-screen.
+        web = WKWebView(frame: CGRect(x: 0, y: 0, width: 1920, height: 480), configuration: WKWebViewConfiguration())
         super.init()
         web.navigationDelegate = self
         if let url = Bundle.main.url(forResource: "weather", withExtension: "html", subdirectory: "Web") {
             web.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
         }
+    }
+
+    /// Build + load + render at app launch so the very first open shows finished content (no splash).
+    func warm() {
+        LocationService.shared.request()
+        apply(config: WeatherWeb.currentConfig())
+    }
+
+    static func currentConfig() -> String {
+        let s = WeatherStore.shared
+        var dict: [String: Any] = [
+            "locations": s.locations.map { ["name": $0.name, "lat": $0.lat, "lon": $0.lon] as [String: Any] },
+            "unit": s.unit, "useCurrent": s.useCurrent,
+        ]
+        let l = LocationService.shared
+        if let la = l.lat, let lo = l.lon { dict["current"] = ["lat": la, "lon": lo, "name": l.cityName ?? "Current Location"] }
+        return (try? JSONSerialization.data(withJSONObject: dict)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
     }
 
     func webView(_ w: WKWebView, didFinish n: WKNavigation!) { loaded = true; pushIfChanged(force: true); scheduleRectRefresh() }
@@ -141,6 +159,8 @@ final class WeatherWeb: NSObject, WKNavigationDelegate {
         web.evaluateJavaScript("window.WEATHER && window.WEATHER.flip(\(e < s ? 1 : -1));", completionHandler: nil)
         scheduleRectRefresh()
     }
+
+    func nudgeMap() { web.evaluateJavaScript("if(typeof _map!=='undefined' && _map){ _map.invalidateSize(); }", completionHandler: nil) }
 
     private func scheduleRectRefresh() { DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak self] in self?.refreshRect() } }
     private func refreshRect() {
@@ -178,6 +198,7 @@ struct WeatherDeviceView: NSViewRepresentable {
             web.frame = v.bounds
             web.autoresizingMask = [.width, .height]
             v.addSubview(web)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { WeatherWeb.shared.nudgeMap() }
         }
     }
 }

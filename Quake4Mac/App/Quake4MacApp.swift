@@ -117,6 +117,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         state.input.start()
 
+        // Warm the Weather webview at launch so its first open shows finished content (no loading splash).
+        WeatherWeb.shared.warm()
+
         // Knob RGB ring: hand the controller + reactive engine the device, then restore the saved
         // look once the device has finished attaching (matching/open is async, ~1s after start()).
         RGBController.shared.input = state.input
