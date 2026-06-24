@@ -182,7 +182,6 @@ enum HomeLayoutMetrics {
 struct HomeScreenView: View {
     @ObservedObject var store = HomeStore.shared
     @ObservedObject var pad: PadModel
-    @State private var jiggle = false
 
     private let M = HomeLayoutMetrics.self
     private var page: Int { pad.homePage }
@@ -203,22 +202,26 @@ struct HomeScreenView: View {
                     .frame(width: w * (1 - 2 * M.sideFrac), height: h * M.topFrac)
                     .position(x: w / 2, y: h * M.topFrac / 2)
 
-                VStack(spacing: 0) {
-                    ForEach(0..<M.rows, id: \.self) { r in
-                        HStack(spacing: 0) {
-                            ForEach(0..<M.cols, id: \.self) { c in
-                                let idx = r * M.cols + c
-                                Group {
-                                    if idx < apps.count { iconCell(apps[idx], size: size, index: idx) } else { Color.clear }
+                TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !pad.editMode)) { tl in
+                    let t = tl.date.timeIntervalSinceReferenceDate
+                    VStack(spacing: 0) {
+                        ForEach(0..<M.rows, id: \.self) { r in
+                            HStack(spacing: 0) {
+                                ForEach(0..<M.cols, id: \.self) { c in
+                                    let idx = r * M.cols + c
+                                    Group {
+                                        if idx < apps.count { iconCell(apps[idx], size: size, index: idx, t: t) } else { Color.clear }
+                                    }
+                                    .frame(width: cellW, height: cellH)
                                 }
-                                .frame(width: cellW, height: cellH)
                             }
                         }
                     }
+                    .frame(width: gridW, height: gridH)
+                    .animation(.spring(response: 0.28, dampingFraction: 0.8), value: apps.map { $0.id })
                 }
                 .frame(width: gridW, height: gridH)
                 .position(x: w / 2, y: h * M.topFrac + gridH / 2)
-                .animation(.spring(response: 0.28, dampingFraction: 0.8), value: apps.map { $0.id })
 
                 dots.position(x: w / 2, y: h * (1 - M.bottomFrac / 2))
 
@@ -230,10 +233,6 @@ struct HomeScreenView: View {
                 }
             }
             .frame(width: w, height: h)
-            .onChange(of: pad.editMode) { on in
-                if on { withAnimation(.easeInOut(duration: 0.13).repeatForever(autoreverses: true)) { jiggle = true } }
-                else { jiggle = false }
-            }
         }
     }
 
@@ -274,10 +273,10 @@ struct HomeScreenView: View {
         }
     }
 
-    private func iconCell(_ app: HomeApp, size: CGFloat, index: Int) -> some View {
+    private func iconCell(_ app: HomeApp, size: CGFloat, index: Int, t: Double) -> some View {
         let dragging = pad.editMode && pad.draggingSlot == index
-        let base: Double = index % 2 == 0 ? 1.7 : -1.7
-        let angle: Double = (pad.editMode && !dragging) ? (jiggle ? base : -base) : 0
+        // Continuous clock-driven wobble — keeps jiggling through reflow (per-icon phase).
+        let angle: Double = (pad.editMode && !dragging) ? sin(t * 9 + Double(index) * 0.9) * 2.0 : 0
         return iconGlyph(app, size: size)
             .opacity(dragging ? 0.25 : 1)          // the lifted icon shows as the floating copy
             .rotationEffect(.degrees(angle))
