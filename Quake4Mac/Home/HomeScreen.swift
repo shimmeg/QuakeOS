@@ -339,19 +339,26 @@ struct HomeLayoutView: View {
     @ViewBuilder private func appRow(_ p: Int, _ j: Int) -> some View {
         let app = store.pages[p][j]
         HStack(spacing: 10) {
+            Image(systemName: "line.3.horizontal").font(.system(size: 13)).foregroundColor(NeonTheme.textTertiary)
             RoundedRectangle(cornerRadius: 7, style: .continuous).fill(app.tint.opacity(0.9))
                 .frame(width: 28, height: 28)
                 .overlay(Image(systemName: app.symbol).font(.system(size: 13, weight: .medium)).foregroundColor(.white))
             Text(app.title).font(.system(size: 13)).foregroundColor(NeonTheme.textPrimary)
             Spacer()
-            Button { store.moveApp(page: p, from: j, to: j - 1) } label: { Image(systemName: "chevron.up") }
-                .buttonStyle(.plain).foregroundColor(NeonTheme.textSecondary).disabled(j == 0)
-            Button { store.moveApp(page: p, from: j, to: j + 1) } label: { Image(systemName: "chevron.down") }
-                .buttonStyle(.plain).foregroundColor(NeonTheme.textSecondary).disabled(j == store.pages[p].count - 1)
             Button { store.removeApp(page: p, at: j) } label: { Image(systemName: "trash") }
                 .buttonStyle(.plain).foregroundColor(NeonTheme.magenta)
         }
-        .padding(.vertical, 3)
+        .padding(.vertical, 5).padding(.horizontal, 6)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(0.03)))
+        .contentShape(Rectangle())
+        .draggable("\(p):\(j)")
+        .dropDestination(for: String.self) { items, _ in
+            guard let s = items.first else { return false }
+            let parts = s.split(separator: ":").compactMap { Int($0) }
+            guard parts.count == 2, parts[0] == p else { return false }   // reorder within the page
+            store.moveApp(page: p, from: parts[1], to: j)
+            return true
+        }
     }
 
     private func wallpaperBinding(_ p: Int) -> Binding<String> {
