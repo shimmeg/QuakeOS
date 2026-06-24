@@ -34,12 +34,41 @@
     {name:"Hacker News",url:"https://news.ycombinator.com"},{name:"Amazon",url:"https://www.amazon.com"},
     {name:"Spotify",url:"https://open.spotify.com"},{name:"Twitch",url:"https://www.twitch.tv"}
   ];
-  function host(u){ try{ return new URL(u).hostname; }catch(e){ return u; } }
+  function safeBookmarkURL(u){
+    try{
+      var parsed = new URL(String(u || ''));
+      return (parsed.protocol === 'https:' || parsed.protocol === 'http:') ? parsed.href : null;
+    }catch(e){ return null; }
+  }
+  function host(u){ try{ return new URL(u).hostname; }catch(e){ return ''; } }
   function render(sites){
-    document.getElementById('grid').innerHTML = (sites||[]).map(function(s){
-      var fav='https://www.google.com/s2/favicons?domain='+host(s.url)+'&sz=128';
-      return '<a class="tile" href="'+s.url+'"><div class="ic"><img src="'+fav+'" alt=""></div><div class="nm">'+s.name+'</div></a>';
-    }).join('');
+    var grid = document.getElementById('grid');
+    grid.replaceChildren();
+    (sites || []).forEach(function(s){
+      var safe = safeBookmarkURL(s && s.url);
+      var tile = document.createElement('a');
+      tile.className = 'tile';
+      tile.href = safe || '#';
+      if(!safe) tile.setAttribute('aria-disabled', 'true');
+
+      var icon = document.createElement('div');
+      icon.className = 'ic';
+      var h = safe ? host(s.url) : '';
+      if(h){
+        var img = document.createElement('img');
+        img.src = 'https://www.google.com/s2/favicons?domain=' + encodeURIComponent(h) + '&sz=128';
+        img.alt = '';
+        icon.appendChild(img);
+      }
+
+      var name = document.createElement('div');
+      name.className = 'nm';
+      name.textContent = (s && s.name) ? s.name : 'Untitled';
+
+      tile.appendChild(icon);
+      tile.appendChild(name);
+      grid.appendChild(tile);
+    });
   }
   window.__setBookmarks = function(list){ render(list && list.length ? list : defaults); };
   render(defaults);   // shown until Swift injects the user's list

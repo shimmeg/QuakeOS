@@ -18,6 +18,9 @@ struct GeneralSettingsView: View {
     @AppStorage("settings.menuBarOnly")     private var menuBarOnly = false   // hide Dock icon
     @AppStorage("settings.openAtLaunch")    private var openAtLaunch = true
     @AppStorage("settings.runInBackground") private var runInBackground = true
+    @AppStorage("settings.allowExecutableMacros") private var allowExecutableMacros = false
+    @AppStorage("settings.developerMode") private var developerMode = false
+    @AppStorage("settings.enablePrivateThermals") private var enablePrivateThermals = false
 
     // Which screen the Quake panel opens to at launch (read by PadModel.applyStartup).
     @AppStorage("startup.target") private var startupTarget = "home"
@@ -55,6 +58,28 @@ struct GeneralSettingsView: View {
                     toggleRow("Open Settings at launch", $openAtLaunch)
                     NeonDivider()
                     toggleRow("Keep running in the background", $runInBackground)
+                }
+
+                NeonCard("Advanced Macros") {
+                    toggleRow("Allow Shell and AppleScript tiles", $allowExecutableMacros)
+                    Text("Treat shared page configs as executable content. Leave this off unless you trust every shell or AppleScript tile on your pages.")
+                        .font(.system(size: 11)).foregroundColor(NeonTheme.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.vertical, 6)
+                }
+
+                NeonCard("Developer Mode") {
+                    toggleRow("Show device debug actions", $developerMode)
+                    Text("Reveals manual RGB probe, tour, browse, and CPU sweep actions after relaunch. These write to the HID/VIA lighting interface.")
+                        .font(.system(size: 11)).foregroundColor(NeonTheme.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.vertical, 6)
+                    NeonDivider()
+                    toggleRow("Enable private thermal sensors", $enablePrivateThermals)
+                    Text("Reads temperature sensors through private IOHIDEventSystem symbols. Leave this off unless you accept the compatibility and distribution risk.")
+                        .font(.system(size: 11)).foregroundColor(NeonTheme.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.vertical, 6)
                 }
 
                 NeonCard("Device launch") {

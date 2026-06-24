@@ -17,8 +17,10 @@ final class NowPlaying: ObservableObject {
     @Published var positionMs = 0
 
     private var timer: Timer?
+    private var pollBusy = false
 
     func start() {
+        guard timer == nil else { return }
         poll()
         timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in self?.poll() }
     }
@@ -56,6 +58,8 @@ final class NowPlaying: ObservableObject {
     """
 
     private func poll() {
+        guard !pollBusy else { return }
+        pollBusy = true
         DispatchQueue.global(qos: .utility).async {
             let p = Process()
             p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
@@ -63,12 +67,16 @@ final class NowPlaying: ObservableObject {
             let pipe = Pipe()
             p.standardOutput = pipe
             p.standardError = FileHandle.nullDevice
-            do { try p.run() } catch { return }
+            do { try p.run() } catch {
+                DispatchQueue.main.async { self.pollBusy = false }
+                return
+            }
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             p.waitUntilExit()
             let raw = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
             let f = raw.components(separatedBy: "|")
             DispatchQueue.main.async {
+                self.pollBusy = false
                 guard f.count >= 6, f[0] != "none" else {
                     self.source = ""; self.title = ""; self.artist = ""; self.album = ""
                     self.isPlaying = false; self.artwork = nil; self.positionMs = 0

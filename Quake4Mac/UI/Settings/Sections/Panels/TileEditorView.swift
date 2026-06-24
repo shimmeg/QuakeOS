@@ -183,8 +183,8 @@ struct TileInspectorRail: View {
         case "url":
             let host = URL(string: str ?? "")?.host ?? (str ?? "—")
             return ("Opens \(host)", str)
-        case "shell":   return ("Runs a shell command", str)
-        case "ascript": return ("Runs an AppleScript", str)
+        case "shell":   return ("Runs an advanced shell macro", str)
+        case "ascript": return ("Runs an advanced AppleScript macro", str)
         case "lum":     return ("Adjusts brightness by \((int ?? 0) >= 0 ? "+" : "")\(int ?? 0)", nil)
         case "page":    return ("Switches to the \(str ?? "—") page", nil)
         default:        return ("No action assigned yet", nil)
@@ -323,9 +323,15 @@ struct TileInspectorRail: View {
         case "url":
             labeledField("URL", placeholder: "https://example.com")
         case "shell":
-            labeledField("Command", placeholder: "open ~/Downloads")
+            VStack(alignment: .leading, spacing: 6) {
+                labeledField("Command", placeholder: "open ~/Downloads")
+                executableWarning
+            }
         case "ascript":
-            labeledField("Script", placeholder: "tell application …")
+            VStack(alignment: .leading, spacing: 6) {
+                labeledField("Script", placeholder: "tell application ...")
+                executableWarning
+            }
         case "lum":
             HStack {
                 Text("Delta").font(.system(size: 12)).foregroundColor(NeonTheme.textSecondary).frame(width: 70, alignment: .leading)
@@ -353,6 +359,12 @@ struct TileInspectorRail: View {
             Text(label).font(.system(size: 12)).foregroundColor(NeonTheme.textSecondary)
             field($eValue, placeholder: placeholder).onChange(of: eValue) { _ in applyInspector() }
         }
+    }
+
+    private var executableWarning: some View {
+        Text(MacroActionExecutor.executableWarning(for: eKind) ?? "")
+            .font(.system(size: 11)).foregroundColor(Color(red: 1, green: 0.65, blue: 0.25))
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private func field(_ text: Binding<String>, placeholder: String) -> some View {

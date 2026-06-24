@@ -23,9 +23,11 @@
 		2DE23EFA2FE8ED13006556C4 /* TileCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DE23EF92FE8ED13006556C4 /* TileCatalog.swift */; };
 		AA0000000000000000000013 /* Quake4MacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000010 /* Quake4MacApp.swift */; };
 		AA0000000000000000000091 /* PanelWeb.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000090 /* PanelWeb.swift */; };
+		AA00000000000000000000A1 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000000000000000000A0 /* KeychainStore.swift */; };
 		AA0000000000000000000014 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000011 /* ContentView.swift */; };
 		AA0000000000000000000015 /* QuakeInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000012 /* QuakeInput.swift */; };
 		AA0000000000000000000017 /* MacroPad.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000016 /* MacroPad.swift */; };
+		AA00000000000000000000A3 /* MacroActionExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000000000000000000A2 /* MacroActionExecutor.swift */; };
 		AA0000000000000000000019 /* SystemMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000018 /* SystemMonitor.swift */; };
 		AA0000000000000000000021 /* Icons in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000020 /* Icons */; };
 		AA0000000000000000000023 /* Web in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000022 /* Web */; };
@@ -67,9 +69,11 @@
 		AA0000000000000000000006 /* Quake4Mac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Quake4Mac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000000010 /* Quake4MacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Quake4MacApp.swift; sourceTree = "<group>"; };
 		AA0000000000000000000090 /* PanelWeb.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelWeb.swift; sourceTree = "<group>"; };
+		AA00000000000000000000A0 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		AA0000000000000000000011 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		AA0000000000000000000012 /* QuakeInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuakeInput.swift; sourceTree = "<group>"; };
 		AA0000000000000000000016 /* MacroPad.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacroPad.swift; sourceTree = "<group>"; };
+		AA00000000000000000000A2 /* MacroActionExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacroActionExecutor.swift; sourceTree = "<group>"; };
 		AA0000000000000000000018 /* SystemMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemMonitor.swift; sourceTree = "<group>"; };
 		AA0000000000000000000020 /* Icons */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Icons; sourceTree = "<group>"; };
 		AA0000000000000000000022 /* Web */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Web; sourceTree = "<group>"; };
@@ -220,6 +224,7 @@
 			children = (
 				AA0000000000000000000010 /* Quake4MacApp.swift */,
 				AA0000000000000000000090 /* PanelWeb.swift */,
+				AA00000000000000000000A0 /* KeychainStore.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -246,6 +251,7 @@
 			isa = PBXGroup;
 			children = (
 				AA0000000000000000000016 /* MacroPad.swift */,
+				AA00000000000000000000A2 /* MacroActionExecutor.swift */,
 				AA0000000000000000000024 /* ScreenWebView.swift */,
 			);
 			path = Macro;
@@ -400,9 +406,11 @@
 				2DE23EE32FE8E948006556C4 /* QuakeStripPreview.swift in Sources */,
 				AA0000000000000000000013 /* Quake4MacApp.swift in Sources */,
 				AA0000000000000000000091 /* PanelWeb.swift in Sources */,
+				AA00000000000000000000A1 /* KeychainStore.swift in Sources */,
 				AA0000000000000000000014 /* ContentView.swift in Sources */,
 				AA0000000000000000000015 /* QuakeInput.swift in Sources */,
 				AA0000000000000000000017 /* MacroPad.swift in Sources */,
+				AA00000000000000000000A3 /* MacroActionExecutor.swift in Sources */,
 				AA0000000000000000000019 /* SystemMonitor.swift in Sources */,
 				AA0000000000000000000051 /* Thermals.swift in Sources */,
 				AA0000000000000000000025 /* ScreenWebView.swift in Sources */,
@@ -479,13 +487,13 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS = NO;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = KWSDH8Z343;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Runs AppleScript-based media and macro actions you explicitly enable.";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Shows your connected Bluetooth devices on the Quake panel.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Uses your location to show local weather on the Quake panel.";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
@@ -506,13 +514,13 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS = NO;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = KWSDH8Z343;
-				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Runs AppleScript-based media and macro actions you explicitly enable.";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Shows your connected Bluetooth devices on the Quake panel.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Uses your location to show local weather on the Quake panel.";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
