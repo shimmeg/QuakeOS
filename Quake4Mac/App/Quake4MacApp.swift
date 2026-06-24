@@ -117,8 +117,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         state.input.start()
 
-        // Warm the Weather webview at launch so its first open shows finished content (no loading splash).
-        WeatherWeb.shared.warm()
+        // Pre-warm every on-device panel webview at launch so first open is instant (no loading splash)
+        // and each panel keeps refreshing in the background while you're elsewhere.
+        PanelWarmer.warmAll()
 
         // Knob RGB ring: hand the controller + reactive engine the device, then restore the saved
         // look once the device has finished attaching (matching/open is async, ~1s after start()).

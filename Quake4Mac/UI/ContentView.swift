@@ -69,17 +69,17 @@ struct ContentView: View {
         } else {
             switch pad.extra {
             case .monitor:
-                ZStack { Wallpaper().ignoresSafeArea(); SystemMonitorView() }
+                MonitorDeviceView().ignoresSafeArea()              // persistent, pre-warmed webview
             case .music:
-                MusicScreenView().ignoresSafeArea()
+                MusicDeviceView().ignoresSafeArea()
             case .clock:
-                ClockScreenView().ignoresSafeArea()
+                ClockDeviceView().ignoresSafeArea()
             case .weather:
                 WeatherScreenView().ignoresSafeArea()
             case .none:
                 switch pad.currentKind {
                 case .grid:                            ScreenWebView(pad: pad).ignoresSafeArea()
-                case .app(let id) where id == "clock": ClockScreenView().ignoresSafeArea()
+                case .app(let id) where id == "clock": ClockDeviceView().ignoresSafeArea()
                 case .web(let url):                    WebDashboardView(urlString: url).ignoresSafeArea()
                 case .app:                             ScreenWebView(pad: pad).ignoresSafeArea()
                 }

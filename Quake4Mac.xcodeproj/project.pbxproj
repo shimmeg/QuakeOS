@@ -22,6 +22,7 @@
 		2DE23EF82FE8ED13006556C4 /* TileGlyphView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DE23EF72FE8ED13006556C4 /* TileGlyphView.swift */; };
 		2DE23EFA2FE8ED13006556C4 /* TileCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DE23EF92FE8ED13006556C4 /* TileCatalog.swift */; };
 		AA0000000000000000000013 /* Quake4MacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000010 /* Quake4MacApp.swift */; };
+		AA0000000000000000000091 /* PanelWeb.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000090 /* PanelWeb.swift */; };
 		AA0000000000000000000014 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000011 /* ContentView.swift */; };
 		AA0000000000000000000015 /* QuakeInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000012 /* QuakeInput.swift */; };
 		AA0000000000000000000017 /* MacroPad.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000016 /* MacroPad.swift */; };
@@ -65,6 +66,7 @@
 		2DE23EF92FE8ED13006556C4 /* TileCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TileCatalog.swift; sourceTree = "<group>"; };
 		AA0000000000000000000006 /* Quake4Mac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Quake4Mac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000000010 /* Quake4MacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Quake4MacApp.swift; sourceTree = "<group>"; };
+		AA0000000000000000000090 /* PanelWeb.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelWeb.swift; sourceTree = "<group>"; };
 		AA0000000000000000000011 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		AA0000000000000000000012 /* QuakeInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuakeInput.swift; sourceTree = "<group>"; };
 		AA0000000000000000000016 /* MacroPad.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacroPad.swift; sourceTree = "<group>"; };
@@ -217,6 +219,7 @@
 			isa = PBXGroup;
 			children = (
 				AA0000000000000000000010 /* Quake4MacApp.swift */,
+				AA0000000000000000000090 /* PanelWeb.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -396,6 +399,7 @@
 				2DE23EE22FE8E948006556C4 /* NeonTheme.swift in Sources */,
 				2DE23EE32FE8E948006556C4 /* QuakeStripPreview.swift in Sources */,
 				AA0000000000000000000013 /* Quake4MacApp.swift in Sources */,
+				AA0000000000000000000091 /* PanelWeb.swift in Sources */,
 				AA0000000000000000000014 /* ContentView.swift in Sources */,
 				AA0000000000000000000015 /* QuakeInput.swift in Sources */,
 				AA0000000000000000000017 /* MacroPad.swift in Sources */,
