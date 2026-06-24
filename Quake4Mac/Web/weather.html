@@ -19,22 +19,21 @@
   #stage{height:100%;}
   .err{height:100%;display:flex;align-items:center;justify-content:center;font-size:32px;color:var(--muted);}
 
-  .top{height:46px;display:flex;align-items:center;justify-content:center;gap:14px;position:relative;}
-  .top .loc{font-size:30px;font-weight:700;}
-  .top .sub{font-size:22px;color:var(--muted);}
-  .dots{position:absolute;right:24px;display:flex;gap:8px;}
+  .dots{position:absolute;top:14px;right:20px;display:flex;gap:8px;z-index:5;}
   .dots i{width:9px;height:9px;border-radius:50%;background:var(--muted);opacity:.4;}
   .dots i.on{background:var(--accent);opacity:1;}
 
-  .body{height:434px;display:flex;gap:14px;padding:0 18px 14px;}
-  .col{display:flex;flex-direction:column;gap:12px;min-width:0;}
+  .body{height:480px;display:flex;gap:14px;padding:16px 18px;}
+  .col{display:flex;flex-direction:column;gap:14px;min-width:0;}
 
-  .now{flex:0 0 300px;display:flex;flex-direction:column;justify-content:center;gap:2px;}
+  .now{flex:0 0 330px;display:flex;flex-direction:column;justify-content:center;gap:4px;
+    background:var(--card);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:20px 24px;}
+  .now .city{font-size:30px;font-weight:700;}
   .now .t{display:flex;align-items:center;gap:14px;}
-  .now .ico{font-size:96px;line-height:1;}
-  .now .temp{font-size:120px;font-weight:300;line-height:.9;}
-  .now .cond{font-size:30px;font-weight:600;color:var(--accent);}
-  .now .hl{font-size:26px;color:var(--muted);}
+  .now .ico{font-size:88px;line-height:1;}
+  .now .temp{font-size:112px;font-weight:300;line-height:.9;}
+  .now .cond{font-size:28px;font-weight:600;color:var(--accent);}
+  .now .hl{font-size:24px;color:var(--muted);}
 
   .mid{flex:1;}
   .panelCard{background:var(--card);border-radius:16px;border:1px solid rgba(255,255,255,.05);padding:10px 14px;}
@@ -62,8 +61,8 @@
   .scale.aqi{background:linear-gradient(90deg,#34c759,#ffd60a,#ff9500,#ff3b30,#af52de,#7a0c2e);}
   .scale.uv{background:linear-gradient(90deg,#34c759,#ffd60a,#ff9500,#ff3b30,#af52de);}
   .scale .mk{position:absolute;top:-3px;width:14px;height:14px;border-radius:50%;background:#fff;border:2px solid #0a0f17;transform:translateX(-7px);}
-  .compass{position:relative;width:64px;height:64px;align-self:flex-end;margin-top:-30px;}
-  .compass svg{width:64px;height:64px;}
+  .compass{align-self:center;width:60px;height:60px;margin-top:6px;}
+  .compass svg{width:60px;height:60px;}
 </style>
 </head>
 <body>
@@ -147,11 +146,10 @@
 
   function render(loc, w, aqd){
     var c=w.current, H=w.hourly, D=w.daily, deg=(cfg.unit==='fahrenheit'?'°F':'°C');
-    var top='<div class="top"><span class="loc">'+(loc.current?'📍 ':'')+loc.name+'</span>'
-      +'<span class="sub">'+rnd(c.temperature_2m)+'° · '+wx(c.weather_code)+'</span>'+dots()+'</div>';
 
-    // current column
-    var nowCol='<div class="col now"><div class="t"><span class="ico">'+ico(c.weather_code,c.is_day)+'</span>'
+    // current column (its own bordered card, with the city name)
+    var nowCol='<div class="col now"><div class="city">'+(loc.current?'📍 ':'')+loc.name+'</div>'
+      +'<div class="t"><span class="ico">'+ico(c.weather_code,c.is_day)+'</span>'
       +'<span class="temp">'+rnd(c.temperature_2m)+'°</span></div>'
       +'<div class="cond">'+wx(c.weather_code)+'</div>'
       +'<div class="hl">H:'+rnd(D.temperature_2m_max[0])+'°  L:'+rnd(D.temperature_2m_min[0])+'°  ·  Feels '+rnd(c.apparent_temperature)+'°</div></div>';
@@ -208,7 +206,7 @@
       + tile(mn.emoji+' Moon', mn.ill+'%', mn.name)
       + '</div>';
 
-    show(top + '<div class="body">' + nowCol + '<div class="col mid">'+hourly+daily+'</div>' + tiles + '</div>');
+    show(dots() + '<div class="body">' + nowCol + '<div class="col mid">'+hourly+daily+'</div>' + tiles + '</div>');
   }
 
   window.WEATHER = {
