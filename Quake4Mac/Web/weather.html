@@ -61,8 +61,10 @@
   .scale.aqi{background:linear-gradient(90deg,#34c759,#ffd60a,#ff9500,#ff3b30,#af52de,#7a0c2e);}
   .scale.uv{background:linear-gradient(90deg,#34c759,#ffd60a,#ff9500,#ff3b30,#af52de);}
   .scale .mk{position:absolute;top:-3px;width:14px;height:14px;border-radius:50%;background:#fff;border:2px solid #0a0f17;transform:translateX(-7px);}
-  .compass{align-self:center;width:60px;height:60px;margin-top:6px;}
-  .compass svg{width:60px;height:60px;}
+  .cwrap{margin-top:auto;padding-top:8px;border-top:1px solid rgba(255,255,255,.08);display:flex;justify-content:center;}
+  .compass{width:74px;height:74px;}
+  .compass svg{width:74px;height:74px;}
+  .tile .u{font-size:18px;color:var(--muted);font-weight:500;}
 </style>
 </head>
 <body>
@@ -193,10 +195,17 @@
     var mn=moon(new Date());
     function tile(lab,big,small,extra){ return '<div class="tile"><div class="lab">'+lab+'</div><div class="big">'+big+'</div><div class="small">'+small+'</div>'+(extra||'')+'</div>'; }
     function scaleMk(cls,pct){ return '<div class="scale '+cls+'"><div class="mk" style="left:'+Math.min(100,Math.max(0,pct))+'%"></div></div>'; }
-    var compass='<div class="compass"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="30" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="2"/>'
-      +'<g transform="rotate('+dir+' 32 32)"><polygon points="32,8 27,32 37,32" fill="#5aa9ff"/><polygon points="32,56 27,32 37,32" fill="rgba(255,255,255,.3)"/></g></svg></div>';
+    function dirName(d){ return ['N','NE','E','SE','S','SW','W','NW'][Math.round(((d%360)/45))%8]; }
+    function compassSVG(d){
+      function lbl(t,x,y){ return '<text x="'+x+'" y="'+y+'" fill="rgba(255,255,255,.5)" font-size="10" text-anchor="middle" dominant-baseline="central">'+t+'</text>'; }
+      return '<div class="cwrap"><div class="compass"><svg viewBox="0 0 74 74">'
+        +'<circle cx="37" cy="37" r="31" fill="none" stroke="rgba(255,255,255,.14)" stroke-width="2"/>'
+        +lbl('N',37,11)+lbl('S',37,63)+lbl('E',63,37)+lbl('W',11,37)
+        +'<g transform="rotate('+d+' 37 37)"><polygon points="37,16 31,40 43,40" fill="#5aa9ff"/><polygon points="37,58 31,40 43,40" fill="rgba(255,255,255,.28)"/></g>'
+        +'</svg></div></div>';
+    }
     var tiles='<div class="col tiles">'
-      + tile('🌬️ Wind', rnd(c.wind_speed_10m)+' <span style="font-size:18px;color:var(--muted)">'+windU+'</span>', 'Gusts '+rnd(c.wind_gusts_10m)+' '+windU, compass)
+      + tile('🌬️ Wind', rnd(c.wind_speed_10m)+' <span class="u">'+windU+'</span>', 'Gusts '+rnd(c.wind_gusts_10m)+' '+windU+' · '+rnd(dir)+'° '+dirName(dir), compassSVG(dir))
       + tile('🟢 Air quality', aqi==null?'—':aqi, aqi==null?'':aqiCat(aqi), aqi==null?'':scaleMk('aqi', aqi/300*100))
       + tile('☀️ UV index', rnd(uv), uvCat(uv), scaleMk('uv', uv/11*100))
       + tile('💧 Humidity', rnd(c.relative_humidity_2m)+'%', 'Relative humidity')
