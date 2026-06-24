@@ -289,7 +289,8 @@ enum PanelWarmer {
     static func warmAll() {
         _ = ClockWeb.shared
         _ = MonitorWeb.shared
-        _ = MusicWeb.shared
+        // MusicWeb intentionally NOT warmed yet — its persistent path is untested on-device, so we keep
+        // the proven MusicScreenView active. Re-add `_ = MusicWeb.shared` once it's verified.
         WeatherWeb.shared.warm()
     }
 }

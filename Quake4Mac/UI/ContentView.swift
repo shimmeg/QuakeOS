@@ -71,7 +71,7 @@ struct ContentView: View {
             case .monitor:
                 MonitorDeviceView().ignoresSafeArea()              // persistent, pre-warmed webview
             case .music:
-                MusicDeviceView().ignoresSafeArea()
+                MusicScreenView().ignoresSafeArea()        // proven path; new persistent MusicDeviceView stays dormant until on-device test
             case .clock:
                 ClockDeviceView().ignoresSafeArea()
             case .weather:
