@@ -52,6 +52,7 @@ final class WallpaperStore: ObservableObject {
     func option(_ id: String) -> WallpaperOption { WallpaperStore.options.first { $0.id == id } ?? WallpaperStore.options[0] }
     func setDefault(_ id: String) { defaultID = id }
     func setPage(_ p: Int, _ id: String?) { if let id { perPage[p] = id } else { perPage.removeValue(forKey: p) } }
+    func removePageIndex(_ i: Int) { perPage = Dictionary(uniqueKeysWithValues: perPage.compactMap { (k, v) in k == i ? nil : (k > i ? (k - 1, v) : (k, v)) }) }   // drop key i, shift keys > i down by one
 }
 
 // MARK: - Looping video renderer

@@ -486,6 +486,7 @@
 				DEVELOPMENT_TEAM = KWSDH8Z343;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSAudioCaptureUsageDescription = "Quake4Mac listens to system audio to drive the beat-reactive RGB ring.";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Shows your connected Bluetooth devices on the Quake panel.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Uses your location to show local weather on the Quake panel.";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
@@ -513,6 +514,7 @@
 				DEVELOPMENT_TEAM = KWSDH8Z343;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSAudioCaptureUsageDescription = "Quake4Mac listens to system audio to drive the beat-reactive RGB ring.";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Shows your connected Bluetooth devices on the Quake panel.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Uses your location to show local weather on the Quake panel.";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;

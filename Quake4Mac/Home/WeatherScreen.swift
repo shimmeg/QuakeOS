@@ -27,6 +27,7 @@ final class WeatherStore: ObservableObject {
         locations.append(WeatherLoc(name: r.name, lat: r.lat, lon: r.lon))
     }
     func remove(at i: Int) { guard locations.indices.contains(i) else { return }; locations.remove(at: i) }
+    func remove(id: UUID) { locations.removeAll { $0.id == id } }
 
     var webConfig: String {
         let arr = locations.map { ["name": $0.name, "lat": $0.lat, "lon": $0.lon] as [String: Any] }
@@ -248,12 +249,12 @@ struct WeatherPanelView: View {
                         }.buttonStyle(.plain)
                     }
                     if !store.locations.isEmpty { NeonDivider() }
-                    ForEach(store.locations.indices, id: \.self) { i in
+                    ForEach(store.locations) { loc in
                         HStack {
                             Image(systemName: "mappin.circle.fill").foregroundColor(NeonTheme.cyan)
-                            Text(store.locations[i].name).font(.system(size: 13)).foregroundColor(NeonTheme.textPrimary)
+                            Text(loc.name).font(.system(size: 13)).foregroundColor(NeonTheme.textPrimary)
                             Spacer()
-                            Button { store.remove(at: i) } label: { Image(systemName: "trash").foregroundColor(NeonTheme.magenta) }.buttonStyle(.plain)
+                            Button { store.remove(id: loc.id) } label: { Image(systemName: "trash").foregroundColor(NeonTheme.magenta) }.buttonStyle(.plain)
                         }
                     }
                 }

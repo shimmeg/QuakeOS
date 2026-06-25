@@ -24,7 +24,7 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
     func request() {
         switch mgr.authorizationStatus {
         case .notDetermined: mgr.requestWhenInUseAuthorization()
-        case .authorizedAlways: mgr.requestLocation()
+        case .authorizedAlways: mgr.requestLocation()   // macOS grants map to authorizedAlways; .authorizedWhenInUse is unavailable here
         default: break
         }
     }

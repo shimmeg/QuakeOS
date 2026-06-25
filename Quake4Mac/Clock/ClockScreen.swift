@@ -69,6 +69,7 @@ final class ClockStore: ObservableObject {
     func addClock() { clocks.append(WorldClock(label: "New York", tz: "America/New_York")) }
     func add(name: String, tz: String) { clocks.append(WorldClock(label: name, tz: tz)) }
     func remove(at index: Int) { guard clocks.indices.contains(index) else { return }; clocks.remove(at: index) }
+    func remove(id: UUID) { clocks.removeAll { $0.id == id } }
 
     /// Display name for a time-zone id (falls back to the id's last path component).
     static func cityName(_ tz: String) -> String {
@@ -261,7 +262,7 @@ struct ClockPageView: View {
                         }.buttonStyle(.plain).disabled(store.clocks.count >= 5)
                     }
                     NeonDivider()
-                    ForEach(store.clocks.indices, id: \.self) { i in clockRow(i) }
+                    ForEach($store.clocks) { $clock in clockRow($clock) }
                 }
                 .padding(.vertical, 8)
             }
@@ -284,17 +285,17 @@ struct ClockPageView: View {
         }
     }
 
-    @ViewBuilder private func clockRow(_ i: Int) -> some View {
+    @ViewBuilder private func clockRow(_ clock: Binding<WorldClock>) -> some View {
         HStack(spacing: 10) {
-            TextField("Label", text: $store.clocks[i].label)
+            TextField("Label", text: clock.label)
                 .textFieldStyle(.plain).font(.system(size: 13)).foregroundColor(NeonTheme.textPrimary)
                 .padding(.horizontal, 10).padding(.vertical, 7).frame(width: 160)
                 .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(0.04)))
                 .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NeonTheme.stroke, lineWidth: 1))
-            Text(store.clocks[i].tz == "local" ? "Local" : store.clocks[i].tz)
+            Text(clock.wrappedValue.tz == "local" ? "Local" : clock.wrappedValue.tz)
                 .font(.system(size: 12)).foregroundColor(NeonTheme.textTertiary).lineLimit(1)
             Spacer()
-            Button { store.remove(at: i) } label: {
+            Button { store.remove(id: clock.wrappedValue.id) } label: {
                 Image(systemName: "trash").font(.system(size: 13)).foregroundColor(NeonTheme.magenta)
             }
             .buttonStyle(.plain).disabled(store.clocks.count <= 1)

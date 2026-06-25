@@ -82,7 +82,7 @@ final class HomeStore: ObservableObject {
 
     // MARK: editing (used by the Mac-side Home Layout editor)
     func addPage() { pages.append([]) }
-    func removePage(_ i: Int) { guard pages.count > 1, pages.indices.contains(i) else { return }; pages.remove(at: i) }
+    func removePage(_ i: Int) { guard pages.count > 1, pages.indices.contains(i) else { return }; pages.remove(at: i); WallpaperStore.shared.removePageIndex(i) }
     func addApp(_ app: HomeApp, toPage i: Int) {
         guard pages.indices.contains(i) else { return }
         pages[i].append(HomeApp(title: app.title, symbol: app.symbol, tint: app.tint, dest: app.dest))
@@ -167,8 +167,8 @@ final class HomeEditSession: ObservableObject {
         let a = draft[i].remove(at: j); draft[i].insert(a, at: k); dirty = true
     }
     func remove(page i: Int, at j: Int) { guard draft.indices.contains(i), draft[i].indices.contains(j) else { return }; draft[i].remove(at: j); dirty = true }
-    func addPage() { draft.append([]); editPage = draft.count - 1; dirty = true }
-    func removePage(_ i: Int) { guard draft.count > 1, draft.indices.contains(i) else { return }; draft.remove(at: i); wallpaperDraft[i] = nil; editPage = min(editPage, draft.count - 1); dirty = true }
+    func addPage() { draft.append([]); wallpaperDraft[draft.count - 1] = nil; editPage = draft.count - 1; dirty = true }
+    func removePage(_ i: Int) { guard draft.count > 1, draft.indices.contains(i) else { return }; draft.remove(at: i); wallpaperDraft = Dictionary(uniqueKeysWithValues: wallpaperDraft.compactMap { (k, v) in k == i ? nil : (k > i ? (k - 1, v) : (k, v)) }); editPage = min(editPage, draft.count - 1); dirty = true }
     func wallpaper(page i: Int) -> String { wallpaperDraft[i] ?? "default" }
     func setWallpaper(page i: Int, _ id: String?) { wallpaperDraft[i] = (id == "default" ? nil : id); dirty = true }
 }

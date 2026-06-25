@@ -143,6 +143,10 @@ final class SpotifyClient: ObservableObject {
         else if type == "album" { path = "/albums/\(id)/tracks?limit=50" }
         else { setDebug("unsupported context: \(type)"); completion([]); return }
 
+        // currentTrackURI is @Published, written on main by fetchNowPlaying — capture it here
+        // (fetchTracks runs on main) so the background dataTask doesn't read it concurrently.
+        let currentURI = self.currentTrackURI
+
         auth.validToken { [weak self] tok in
             guard let self else { return }
             guard let tok, let url = URL(string: "https://api.spotify.com/v1" + path) else {
@@ -165,7 +169,7 @@ final class SpotifyClient: ObservableObject {
                     let title = tr["name"] as? String ?? ""
                     let artist = (tr["artists"] as? [[String: Any]])?.compactMap { $0["name"] as? String }.joined(separator: ", ") ?? ""
                     let art = ((tr["album"] as? [String: Any])?["images"] as? [[String: Any]])?.last?["url"] as? String
-                    return ["uri": u, "title": title, "artist": artist, "art": art ?? NSNull(), "current": (u == self.currentTrackURI)]
+                    return ["uri": u, "title": title, "artist": artist, "art": art ?? NSNull(), "current": (u == currentURI)]
                 }
                 if tracks.isEmpty {
                     let ik = items.first.map { Array($0.keys).joined(separator: ",") } ?? "nil"

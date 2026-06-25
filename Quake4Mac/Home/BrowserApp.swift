@@ -343,7 +343,7 @@ struct BrowserPanelView: View {
             LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
             NeonCard("Home page bookmarks") {
                 VStack(alignment: .leading, spacing: 10) {
-                    ForEach(bm.items.indices, id: \.self) { i in bookmarkRow(i) }
+                    ForEach($bm.items) { $item in bookmarkRow($item) }
                     Button { bm.items.append(BookmarkItem(name: "New", url: "https://")) } label: {
                         Label("Add bookmark", systemImage: "plus.circle.fill")
                             .font(.system(size: 13, weight: .medium)).foregroundColor(NeonTheme.cyan)
@@ -357,19 +357,19 @@ struct BrowserPanelView: View {
         }
     }
 
-    @ViewBuilder private func bookmarkRow(_ i: Int) -> some View {
+    @ViewBuilder private func bookmarkRow(_ item: Binding<BookmarkItem>) -> some View {
         HStack(spacing: 10) {
-            TextField("Name", text: $bm.items[i].name)
+            TextField("Name", text: item.name)
                 .textFieldStyle(.plain).font(.system(size: 13)).foregroundColor(NeonTheme.textPrimary)
                 .padding(.horizontal, 10).padding(.vertical, 7).frame(width: 150)
                 .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(0.04)))
                 .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NeonTheme.stroke, lineWidth: 1))
-            TextField("https://…", text: $bm.items[i].url)
+            TextField("https://…", text: item.url)
                 .textFieldStyle(.plain).font(.system(size: 13)).foregroundColor(NeonTheme.textPrimary)
                 .padding(.horizontal, 10).padding(.vertical, 7).frame(maxWidth: .infinity)
                 .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(0.04)))
                 .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NeonTheme.stroke, lineWidth: 1))
-            Button { bm.items.remove(at: i) } label: {
+            Button { bm.items.removeAll { $0.id == item.wrappedValue.id } } label: {
                 Image(systemName: "trash").font(.system(size: 13)).foregroundColor(NeonTheme.magenta)
             }
             .buttonStyle(.plain).disabled(bm.items.count <= 1)

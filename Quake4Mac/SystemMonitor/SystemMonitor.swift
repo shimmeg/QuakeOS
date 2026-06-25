@@ -120,7 +120,10 @@ final class SystemStats: ObservableObject {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/du")
         p.arguments = ["-sk", "-d", "0"] + defs.map { $0.1 }
-        let out = Pipe(); p.standardOutput = out; p.standardError = Pipe()
+        // Drain stderr to /dev/null so a flood of "Permission denied" can't fill the pipe's
+        // ~64KB kernel buffer and deadlock the child on write(2). Read stdout to EOF BEFORE
+        // waitUntilExit() so a large stdout can't deadlock either.
+        let out = Pipe(); p.standardOutput = out; p.standardError = FileHandle.nullDevice
         var sizes: [String: Double] = [:]
         if (try? p.run()) != nil {
             let data = out.fileHandleForReading.readDataToEndOfFile()
@@ -154,7 +157,9 @@ final class SystemStats: ObservableObject {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/sbin/system_profiler")
         p.arguments = ["SPBluetoothDataType", "-json"]
-        let out = Pipe(); p.standardOutput = out; p.standardError = Pipe()
+        // Drain stderr to /dev/null (an unconsumed stderr pipe can fill and deadlock the
+        // child). Read stdout to EOF BEFORE waitUntilExit() so large output can't deadlock.
+        let out = Pipe(); p.standardOutput = out; p.standardError = FileHandle.nullDevice
         guard (try? p.run()) != nil else { return }
         let data = out.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()
@@ -186,7 +191,10 @@ final class SystemStats: ObservableObject {
             let r = SystemStats.psSnapshot()
             DispatchQueue.main.async {
                 guard let self = self else { return }
-                self.procBusy = false
+                // Reset the guard on EVERY exit path — including psSnapshot() returning nil —
+                // so one failed sample doesn't freeze the process panel forever. procBusy is
+                // only ever read/written on the main thread, so this stays consistent.
+                defer { self.procBusy = false }
                 guard let r = r else { return }
                 self.processCount = r.total
                 self.procRunning = r.running
@@ -201,7 +209,9 @@ final class SystemStats: ObservableObject {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/ps")
         p.arguments = ["-axo", "state=,rss=,comm="]
-        let out = Pipe(); p.standardOutput = out; p.standardError = Pipe()
+        // Drain stderr to /dev/null (an unconsumed stderr pipe can fill and deadlock the
+        // child). Read stdout to EOF BEFORE waitUntilExit() so large output can't deadlock.
+        let out = Pipe(); p.standardOutput = out; p.standardError = FileHandle.nullDevice
         do { try p.run() } catch { return nil }
         let data = out.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()
@@ -300,9 +310,13 @@ final class SystemStats: ObservableObject {
     private func readCPU() -> Double {
         var info = host_cpu_load_info()
         var count = mach_msg_type_number_t(MemoryLayout<host_cpu_load_info_data_t>.stride / MemoryLayout<integer_t>.stride)
+        // mach_host_self() returns a send right we own — release it after the last use,
+        // otherwise we leak a Mach port on every sample.
+        let host = mach_host_self()
+        defer { mach_port_deallocate(mach_task_self_, host) }
         let kr = withUnsafeMutablePointer(to: &info) { p in
             p.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
-                host_statistics(mach_host_self(), HOST_CPU_LOAD_INFO, $0, &count)
+                host_statistics(host, HOST_CPU_LOAD_INFO, $0, &count)
             }
         }
         guard kr == KERN_SUCCESS else { return cpuLoad }
@@ -317,9 +331,13 @@ final class SystemStats: ObservableObject {
     private func readMem() {
         var stats = vm_statistics64()
         var count = mach_msg_type_number_t(MemoryLayout<vm_statistics64_data_t>.stride / MemoryLayout<integer_t>.stride)
+        // mach_host_self() returns a send right we own — release it after the last use,
+        // otherwise we leak a Mach port on every sample.
+        let host = mach_host_self()
+        defer { mach_port_deallocate(mach_task_self_, host) }
         let kr = withUnsafeMutablePointer(to: &stats) { p in
             p.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
-                host_statistics64(mach_host_self(), HOST_VM_INFO64, $0, &count)
+                host_statistics64(host, HOST_VM_INFO64, $0, &count)
             }
         }
         guard kr == KERN_SUCCESS else { return }
