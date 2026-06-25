@@ -64,7 +64,9 @@ final class SystemStats: ObservableObject {
         guard timer == nil else { return }
         memTotal = Double(ProcessInfo.processInfo.physicalMemory)
         sample()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in self?.sample() }
+        let t = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in self?.sample() }
+        t.tolerance = 0.15   // let the kernel coalesce wakeups; imperceptible on a 1Hz status gauge
+        timer = t
     }
 
     func stop() { timer?.invalidate(); timer = nil }

@@ -22,7 +22,9 @@ final class NowPlaying: ObservableObject {
     func start() {
         guard timer == nil else { return }
         poll()
-        timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in self?.poll() }
+        let t = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in self?.poll() }
+        t.tolerance = 0.4   // coalesce wakeups; now-playing doesn't need exact 2s spacing
+        timer = t
     }
 
     func stop() { timer?.invalidate(); timer = nil }

@@ -528,6 +528,11 @@ final class RGBReactiveEngine: ObservableObject {
 
     private func flash(_ color: Color) {
         let (h, s) = RGBReactiveEngine.hsv(color)
+        // Always re-assert Solid here. (We tried skipping this when RGBLiveState.effect==1, but that
+        // mirror tracks the last-ATTEMPTED send and defaults to 1, so after a cold boot / reattach where
+        // the effect write was dropped the ring can physically be on a saved non-solid effect while the
+        // mirror reads 1 — the flash would then paint colour onto the wrong effect. The extra write is
+        // cheap now that per-write logging is gone, so correctness wins.)
         input?.rgbSetEffect(1)                 // Solid Color
         input?.rgbSetColor(hue: h, sat: s)
         input?.rgbSetBrightness(255)
@@ -654,6 +659,7 @@ final class RGBReactiveEngine: ObservableObject {
         guard cpuTimer == nil else { return }
         // Thermals must be read on the main thread; poll every 2s (sensor values are cached/cheap).
         let t = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in self?.readCPUTint() }
+        t.tolerance = 0.4   // coalesce wakeups; a heat-alert poll doesn't need exact 2s spacing
         cpuTimer = t
         readCPUTint()
     }

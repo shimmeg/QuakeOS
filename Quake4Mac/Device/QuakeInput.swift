@@ -77,13 +77,23 @@ struct TouchCalibration {
 final class QuakeInputReader: ObservableObject {
 
     // UI-facing state (updated on the main run loop, where HID callbacks fire).
-    @Published var lastEvent: String = "—"
-    @Published var knobValue: Int = 0
-    @Published var touchPoint: CGPoint? = nil      // normalized 0..1, nil when lifted
-    @Published var lastRawTouch: (x: Int, y: Int)? = nil
+    //
+    // lastEvent/knobValue/touchPoint/lastRawTouch are diagnostic state with NO observers — keeping
+    // them @Published made every touch-move/knob report fire objectWillChange (forwarded up through
+    // AppState into ContentView), re-evaluating the root view at HID report rate during a drag for
+    // nothing. Plain vars: still readable for debugging, but no per-event SwiftUI invalidation.
+    var lastEvent: String = "—"
+    var knobValue: Int = 0
+    var touchPoint: CGPoint? = nil                 // normalized 0..1, nil when lifted
+    var lastRawTouch: (x: Int, y: Int)? = nil
     @Published var knobConnected = false
     @Published var touchConnected = false
     @Published var luminance: Int = 255      // device panel backlight, 0–255 (0xA3 cmd 5)
+
+    /// Verbose per-event / per-HID-write logging — only when Developer Mode is on. Keeps the stderr
+    /// syscalls + hex `String(format:)` off the knob/touch/RGB hot paths in normal operation.
+    /// `UserDefaults.bool` is an in-memory read after first access, so this is cheap to poll.
+    private var verboseHID: Bool { UserDefaults.standard.bool(forKey: "settings.developerMode") }
 
     var calibration = TouchCalibration()
 
@@ -358,8 +368,12 @@ final class QuakeInputReader: ObservableObject {
         contactSessionActive = true
         touchPoint = p
         emit(began ? .touchBegan(p) : .touchMoved(p))
-        lastEvent = String(format: "touch (%d,%d) → (%.2f,%.2f)", x, y, p.x, p.y)
-        if began { log(String(format: "TOUCH begin raw(%d,%d) → norm(%.2f,%.2f)", x, y, p.x, p.y)) }
+        // String(format:) here used to run on EVERY touch-move report; gate it behind Developer Mode
+        // so the normal drag path does no per-report allocation/formatting for an unobserved field.
+        if verboseHID {
+            lastEvent = String(format: "touch (%d,%d) → (%.2f,%.2f)", x, y, p.x, p.y)
+            if began { log(String(format: "TOUCH begin raw(%d,%d) → norm(%.2f,%.2f)", x, y, p.x, p.y)) }
+        }
 
         // The panel doesn't reliably send a touch-up report, so treat a short gap with
         // no further reports as a lift. This makes each discrete tap re-register.
@@ -403,9 +417,11 @@ final class QuakeInputReader: ObservableObject {
     func startKeepAlive() {
         sendPing()
         keepAliveTimer?.invalidate()
-        keepAliveTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+        let t = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
             self?.sendPing()
         }
+        t.tolerance = 1.0   // let the kernel coalesce the wakeup; stays well under the ~5s blank-timeout margin
+        keepAliveTimer = t
         log("keep-alive started — ping A3 02 02 EF F1 every 10s")
     }
 
@@ -462,18 +478,24 @@ final class QuakeInputReader: ObservableObject {
         var frame = [UInt8](repeating: 0, count: 32)
         frame[0] = command
         for (i, b) in data.enumerated() where (1 + i) < 32 { frame[1 + i] = b }
-        let hexData = data.map { String(format: "%02X", $0) }.joined(separator: " ")
+
+        // Per-write hex `String(format:)` + synchronous stderr `log()` ran on EVERY RGB write — and
+        // the beat visualizer drives ~40 writes/sec on the main run loop. Gate both behind Developer
+        // Mode (when you're doing RGB work it's on, so you still get full logs) so normal lighting
+        // does no formatting/syscalls on the hot path.
 
         // Send ONLY to the VIA raw-HID interface (0xFF60/0x61) — the one DK-Suite uses.
         guard let dev = viaDevice else {
-            if !viaProbing {
+            if !viaProbing && verboseHID {
+                let hexData = data.map { String(format: "%02X", $0) }.joined(separator: " ")
                 log("VIA cmd=0x\(String(format: "%02X", command)) [\(hexData)] DROPPED — no 0xFF60 interface open " +
                     "(grant Input Monitoring + replug; lighting can't work until 'VIA raw-HID interface READY' appears)")
             }
             return
         }
         let rc = IOHIDDeviceSetReport(dev, kIOHIDReportTypeOutput, 0, frame, frame.count)
-        if !viaProbing {
+        if !viaProbing && verboseHID {
+            let hexData = data.map { String(format: "%02X", $0) }.joined(separator: " ")
             log(String(format: "VIA cmd=0x%02X [%@] → SetReport rc=0x%08X (%@)",
                        command, hexData, UInt32(bitPattern: rc),
                        rc == kIOReturnSuccess ? "OK" : "FAIL"))

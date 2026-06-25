@@ -55,7 +55,9 @@ final class SpotifyClient: ObservableObject {
         // Always poll; calls are no-ops until a token exists, then pick up automatically.
         guard timer == nil else { return }
         poll()
-        timer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in self?.poll() }
+        let t = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in self?.poll() }
+        t.tolerance = 0.5   // coalesce wakeups; player polling tolerates ~0.5s jitter
+        timer = t
     }
 
     func stop() { guard !pinned else { return }; timer?.invalidate(); timer = nil }
@@ -66,7 +68,10 @@ final class SpotifyClient: ObservableObject {
         guard !pollBusy else { return }
         pollBusy = true
         let shouldFetchQueue = pollTick % 3 == 0
-        let shouldFetchDevices = deviceID == nil
+        // Until a device is known, probe devices every ~3rd poll (~9s) instead of every 3s — fetchNowPlaying
+        // already learns the active device whenever something is playing, so this is just the idle fallback.
+        // Cuts idle request volume / 429 exposure while keeping device discovery responsive after connect.
+        let shouldFetchDevices = deviceID == nil && pollTick % 3 == 0
         pollTick &+= 1
         fetchNowPlaying { [weak self] in        // ONE /me/player call: now-playing + state + device
             guard let self else { return }

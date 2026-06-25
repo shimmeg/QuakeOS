@@ -73,7 +73,7 @@ final class PadModel: ObservableObject {
 
     @Published var pageIndex = 0
     @Published var pressedTileID: UUID? = nil
-    @Published var lastFired: String = ""
+    var lastFired: String = ""        // diagnostic only, no observers — plain var so a tile tap doesn't re-render the pad
 
     private unowned let input: QuakeInputReader
     private var storeSub: AnyCancellable?

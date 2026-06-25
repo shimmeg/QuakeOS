@@ -47,6 +47,19 @@ final class WallpaperStore: ObservableObject {
         if let data = try? JSONEncoder().encode(perPage) { UserDefaults.standard.set(data, forKey: "wallpaper.perPage") }
     }
 
+    // Decoded-image cache: StaticImageWallpaperView is a struct re-created on every ContentView.body
+    // re-eval (page change, app open/close), and its init used to NSImage(contentsOf:) — re-reading +
+    // re-decoding the PNG from the bundle each time. NSCache is thread-safe and self-evicts under
+    // memory pressure; there are only a handful of wallpapers, so it stays tiny.
+    private static let imageCache = NSCache<NSString, NSImage>()
+    static func image(at url: URL) -> NSImage? {
+        let key = url.path as NSString
+        if let cached = imageCache.object(forKey: key) { return cached }
+        guard let img = NSImage(contentsOf: url) else { return nil }
+        imageCache.setObject(img, forKey: key)
+        return img
+    }
+
     func id(forPage p: Int) -> String { perPage[p] ?? defaultID }
     func replacePerPage(_ m: [Int: String]) { perPage = m }   // commit the layout editor's per-page wallpaper draft
     func option(_ id: String) -> WallpaperOption { WallpaperStore.options.first { $0.id == id } ?? WallpaperStore.options[0] }
@@ -84,7 +97,7 @@ struct StaticImageWallpaperView: View {
     private let image: NSImage?
 
     init(url: URL) {
-        image = NSImage(contentsOf: url)
+        image = WallpaperStore.image(at: url)
     }
 
     var body: some View {

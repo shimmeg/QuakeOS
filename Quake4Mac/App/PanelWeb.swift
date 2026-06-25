@@ -139,17 +139,38 @@ final class MonitorWeb: PanelWeb {
     let stats = SystemStats()
     private var bag = Set<AnyCancellable>()
     private var lastTouch: CGPoint?
+    private var lastJSON = ""
+    private var pushScheduled = false
 
     init() {
         super.init(html: "monitor")
-        stats.start()    // keep stats live from launch so the panel is always current in the background
+        // Coalesce the firehose: one 1Hz sample() writes ~17-20 @Published fields across several
+        // run-loop turns, and DispatchQueue.main.async does NOT coalesce them — so this used to fire
+        // ~5-10 full JSON-encode + percent-encode + evaluateJavaScript cycles per second, each
+        // triggering a full DOM rebuild in monitor.html. Collapse the burst into ONE push per run-loop
+        // turn; push() then dirty-checks the payload, mirroring MusicWeb/ClockWeb.
         stats.objectWillChange
-            .sink { [weak self] in DispatchQueue.main.async { self?.push() } }
+            .sink { [weak self] in self?.schedulePush() }
             .store(in: &bag)
     }
 
-    override func onReady() { push() }
-    override func onShow() { push() }
+    // Only sample while the panel is actually on screen. The sampler forks `/bin/ps` every second
+    // (plus system_profiler/du periodically); previously it ran forever from launch even if the panel
+    // was never opened or the display was asleep. start()/stop() are idempotent — same pattern the
+    // standalone SystemMonitorView already uses via onAppear/onDisappear.
+    override func onReady() { lastJSON = ""; push() }
+    override func onShow() { stats.start(); push() }
+    override func onHide() { stats.stop() }
+
+    private func schedulePush() {
+        guard !pushScheduled else { return }
+        pushScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.pushScheduled = false
+            self.push()
+        }
+    }
 
     private func push() {
         guard loaded else { return }
@@ -168,9 +189,12 @@ final class MonitorWeb: PanelWeb {
                         "cats": s.storageCats.map { ["name": $0.name, "bytes": $0.bytes] }],
             "bt": s.bt,
         ]
-        guard let data = try? JSONSerialization.data(withJSONObject: dict),
-              let json = String(data: data, encoding: .utf8),
-              let enc = json.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return }
+        // .sortedKeys → stable string so the dirty-check below is deterministic across encodes.
+        guard let data = try? JSONSerialization.data(withJSONObject: dict, options: [.sortedKeys]),
+              let json = String(data: data, encoding: .utf8) else { return }
+        if json == lastJSON { return }       // identical frame → skip the percent-encode + JS + DOM rebuild
+        lastJSON = json
+        guard let enc = json.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return }
         eval("window.MON.set(decodeURIComponent('\(enc)'))")
     }
 
