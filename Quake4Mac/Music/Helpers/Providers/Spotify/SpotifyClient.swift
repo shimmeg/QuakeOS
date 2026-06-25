@@ -62,7 +62,7 @@ final class SpotifyClient: ObservableObject {
 
     private var pollTick = 0
     private func poll() {
-        if let until = rateLimitedUntil, Date() < until { return }   // backing off after a 429
+        if isBackingOff { return }   // backing off after a 429
         guard !pollBusy else { return }
         pollBusy = true
         let shouldFetchQueue = pollTick % 3 == 0
@@ -77,9 +77,10 @@ final class SpotifyClient: ObservableObject {
     }
 
     private func fetchDevices() {
-        get("/me/player/devices") { [weak self] json in
+        get("/me/player/devices") { [weak self] json, code in
             guard let self else { return }
-            let ds = json?["devices"] as? [[String: Any]] ?? []
+            guard (200..<300).contains(code), let json else { return }
+            let ds = json["devices"] as? [[String: Any]] ?? []
             self.deviceID = (ds.first(where: { $0["is_active"] as? Bool == true })?["id"] as? String) ?? (ds.first?["id"] as? String)
         }
     }
@@ -90,15 +91,17 @@ final class SpotifyClient: ObservableObject {
     /// repeat, progress, context AND the active device, replacing the 3 separate calls that
     /// were tripping Spotify's rate limit.
     private func fetchNowPlaying(completion: (() -> Void)? = nil) {
-        get("/me/player") { [weak self] json in
+        get("/me/player") { [weak self] json, code in
             defer { completion?() }
             guard let self else { return }
             // 204/empty = nothing active on any device; keep last-known title/artist/art to
             // avoid flicker, but clear the "playing" state so the scrubber doesn't look like
             // it's playing a frozen track.
             guard let json, let item = json["item"] as? [String: Any] else {
-                self.isPlaying = false
-                self.progressMs = 0
+                if code == 204 {
+                    self.isPlaying = false
+                    self.progressMs = 0
+                }
                 return
             }
             self.available = true
@@ -120,17 +123,19 @@ final class SpotifyClient: ObservableObject {
     }
 
     private func fetchQueue() {
-        get("/me/player/queue") { [weak self] json in
+        get("/me/player/queue") { [weak self] json, code in
             guard let self, let json else { return }
+            guard (200..<300).contains(code) else { return }
             let items = json["queue"] as? [[String: Any]] ?? []
             self.queue = items.prefix(8).map { Self.track(from: $0) }
         }
     }
 
     func loadPlaylists() {
-        get("/me/playlists?limit=30") { [weak self] json in
+        get("/me/playlists?limit=30") { [weak self] json, code in
             guard let self else { return }
-            let items = json?["items"] as? [[String: Any]] ?? []
+            guard (200..<300).contains(code), let json else { return }
+            let items = json["items"] as? [[String: Any]] ?? []
             self.playlists = items.compactMap { p in
                 guard let name = p["name"] as? String, let uri = p["uri"] as? String else { return nil }
                 let art = (p["images"] as? [[String: Any]])?.first?["url"] as? String
@@ -150,7 +155,7 @@ final class SpotifyClient: ObservableObject {
 
     /// Fetch tracks for a playlist OR album context URI. Reports the actual outcome to tracksDebug.
     private func fetchTracks(forContextURI uri: String, _ completion: @escaping ([[String: Any]]) -> Void) {
-        if let until = rateLimitedUntil, Date() < until { completion([]); return }   // backing off after a 429
+        if isBackingOff { setDebug("rate limited"); return }   // backing off after a 429
         let parts = uri.components(separatedBy: ":")   // spotify:playlist:ID  /  spotify:album:ID
         guard parts.count >= 3 else { setDebug("bad uri: \(uri)"); completion([]); return }
         let type = parts[1], id = parts[2]
@@ -172,7 +177,13 @@ final class SpotifyClient: ObservableObject {
             req.timeoutInterval = 10
             req.setValue("Bearer \(tok)", forHTTPHeaderField: "Authorization")
             URLSession.shared.dataTask(with: req) { data, resp, err in
-                let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+                let http = resp as? HTTPURLResponse
+                let code = http?.statusCode ?? -1
+                if code == 429 {
+                    self.backOff(http)
+                    self.setDebug("HTTP 429: rate limited")
+                    return
+                }
                 let json = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? nil
                 if let apiErr = (json?["error"] as? [String: Any])?["message"] as? String {
                     self.setDebug("HTTP \(code): \(apiErr)"); DispatchQueue.main.async { completion([]) }; return
@@ -210,6 +221,7 @@ final class SpotifyClient: ObservableObject {
     // MARK: Control
 
     func playPause() {
+        if isBackingOff { return }
         let wasPlaying = isPlaying
         isPlaying.toggle()
         command("PUT", withDevice(wasPlaying ? "/me/player/pause" : "/me/player/play")) { self.fetchNowPlaying() }
@@ -248,10 +260,15 @@ final class SpotifyClient: ObservableObject {
         }
     }
 
-    private func get(_ path: String, _ completion: @escaping ([String: Any]?) -> Void) {
-        if let until = rateLimitedUntil, Date() < until { DispatchQueue.main.async { completion(nil) }; return }   // backing off after a 429
+    private var isBackingOff: Bool {
+        if let until = rateLimitedUntil, Date() < until { return true }
+        return false
+    }
+
+    private func get(_ path: String, _ completion: @escaping ([String: Any]?, Int) -> Void) {
+        if isBackingOff { DispatchQueue.main.async { completion(nil, 429) }; return }   // backing off after a 429
         auth.validToken { tok in
-            guard let tok else { DispatchQueue.main.async { completion(nil) }; return }
+            guard let tok else { DispatchQueue.main.async { completion(nil, 401) }; return }
             var req = URLRequest(url: URL(string: "https://api.spotify.com/v1" + path)!)
             req.timeoutInterval = 10
             req.setValue("Bearer \(tok)", forHTTPHeaderField: "Authorization")
@@ -260,13 +277,13 @@ final class SpotifyClient: ObservableObject {
                 let code = http?.statusCode ?? -1
                 if code == 429 { self.backOff(http) }
                 let json = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? nil
-                DispatchQueue.main.async { completion(json) }
+                DispatchQueue.main.async { completion(json, code) }
             }.resume()
         }
     }
 
     private func command(_ method: String, _ path: String, body: [String: Any]? = nil, then: (() -> Void)? = nil) {
-        if let until = rateLimitedUntil, Date() < until { return }   // backing off after a 429
+        if isBackingOff { return }   // backing off after a 429
         auth.validToken { tok in
             guard let tok else { return }
             var req = URLRequest(url: URL(string: "https://api.spotify.com/v1" + path)!)

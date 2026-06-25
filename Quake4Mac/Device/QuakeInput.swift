@@ -154,6 +154,24 @@ final class QuakeInputReader: ObservableObject {
         FileHandle.standardError.write(("[Quake] " + s + "\n").data(using: .utf8)!)
     }
 
+    deinit {
+        keepAliveTimer?.invalidate()
+        keepAliveTimer = nil
+        liftWork?.cancel()
+        sessionResetWork?.cancel()
+
+        let entries = openDevices
+        openDevices.removeAll()
+        for entry in entries { close(entry) }
+        viaDevice = nil
+
+        if let manager {
+            IOHIDManagerUnscheduleFromRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
+            IOHIDManagerClose(manager, IOOptionBits(kIOHIDOptionsTypeNone))
+            self.manager = nil
+        }
+    }
+
     // Called from the device-matching callback once we know the device + kind.
     fileprivate func attach(device: IOHIDDevice, kind: QuakeDeviceKind) {
         let vid = (IOHIDDeviceGetProperty(device, kIOHIDVendorIDKey as CFString) as? Int) ?? -1
@@ -176,6 +194,11 @@ final class QuakeInputReader: ObservableObject {
     private func openAttempt(device: IOHIDDevice, kind: QuakeDeviceKind,
                              vid: Int, pid: Int, usagePage: Int, usage: Int, tries: Int) {
         let id = String(format: "%04X:%04X up=0x%02X u=0x%02X", vid, pid, usagePage, usage)
+        if openDevices.contains(where: { sameDevice($0.device, device) }) {
+            log("skip duplicate open \(id) — interface already open")
+            return
+        }
+
         let r = IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeNone))
         if r != kIOReturnSuccess {
             log("open DENIED \(id) (0x\(String(UInt32(bitPattern: r), radix: 16))) try \(tries)")
@@ -224,10 +247,11 @@ final class QuakeInputReader: ObservableObject {
 
     fileprivate func markRemoved(device: IOHIDDevice, kind: QuakeDeviceKind) {
         detach(device: device)
-        knobConnected = openDevices.contains { $0.kind == .knob }
+        let hasKnob = openDevices.contains { $0.kind == .knob }
+        knobConnected = hasKnob
         touchConnected = openDevices.contains { $0.kind == .touch }
         if !touchConnected { touchPoint = nil }
-        if openDevices.isEmpty {
+        if openDevices.isEmpty || !hasKnob {
             wakeAttempted = false
             stopKeepAlive()
         }
@@ -243,12 +267,16 @@ final class QuakeInputReader: ObservableObject {
 
         for entry in removed {
             if let via = viaDevice, sameDevice(via, entry.device) { viaDevice = nil }
-            IOHIDDeviceRegisterInputReportCallback(entry.device, entry.buffer, 0, nil, nil)
-            IOHIDDeviceClose(entry.device, IOOptionBits(kIOHIDOptionsTypeNone))
-            entry.buffer.deinitialize(count: reportBufferSize)
-            entry.buffer.deallocate()
+            close(entry)
         }
         log("detached \(removed.count) HID interface(s); \(openDevices.count) still open")
+    }
+
+    private func close(_ entry: OpenDevice) {
+        IOHIDDeviceRegisterInputReportCallback(entry.device, entry.buffer, 0, nil, nil)
+        IOHIDDeviceClose(entry.device, IOOptionBits(kIOHIDOptionsTypeNone))
+        entry.buffer.deinitialize(count: reportBufferSize)
+        entry.buffer.deallocate()
     }
 
     private func sameDevice(_ lhs: IOHIDDevice, _ rhs: IOHIDDevice) -> Bool {
