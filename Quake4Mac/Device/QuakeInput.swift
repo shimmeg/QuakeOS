@@ -91,17 +91,13 @@ final class QuakeInputReader: ObservableObject {
     var onEvent: ((QuakeEvent) -> Void)?
 
     private var manager: IOHIDManager?
-    // One record per opened HID interface. Owns everything that must be torn down when the
-    // device goes away: the IOHIDDevice handle, the input-report buffer, and the DeviceTag
-    // (whose pointer was handed to IOHIDDeviceRegisterInputReportCallback as the C context, so
-    // it must outlive the registration). Replaces the old parallel buffers/tags/openDevices.
-    private struct OpenInterface {
+    private struct OpenDevice {
         let kind: QuakeDeviceKind
         let device: IOHIDDevice
         let buffer: UnsafeMutablePointer<UInt8>
         let tag: DeviceTag
     }
-    private var openInterfaces: [OpenInterface] = []
+    private var openDevices: [OpenDevice] = []
     // The QMK raw-HID / VIA interface (usagePage 0xFF60, usage 0x61). Confirmed from DK-Suite's
     // own logs: it targets exactly VID 0x4158/PID 0x514B, usagePage 65376, usage 97, interface 2.
     // ALL lighting must go to THIS interface specifically — the knob also exposes a System-Control
@@ -109,6 +105,8 @@ final class QuakeInputReader: ObservableObject {
     private var viaDevice: IOHIDDevice?
     private var wakeAttempted = false
     private var liftWork: DispatchWorkItem?
+    private var sessionResetWork: DispatchWorkItem?
+    private var contactSessionActive = false
     private let reportBufferSize = 64
     private var viaProbing = false
     private var probeQueue: [[UInt8]] = []
@@ -156,30 +154,6 @@ final class QuakeInputReader: ObservableObject {
         FileHandle.standardError.write(("[Quake] " + s + "\n").data(using: .utf8)!)
     }
 
-    // Full teardown: stop the heartbeat, cancel the pending touch-lift, release every still-open
-    // interface (deregister callback → close → free buffer), then unschedule + close the manager.
-    deinit {
-        keepAliveTimer?.invalidate()
-        keepAliveTimer = nil
-        liftWork?.cancel()
-        liftWork = nil
-
-        for entry in openInterfaces {
-            IOHIDDeviceRegisterInputReportCallback(entry.device, entry.buffer, reportBufferSize, nil, nil)
-            IOHIDDeviceClose(entry.device, IOOptionBits(kIOHIDOptionsTypeNone))
-            entry.buffer.deinitialize(count: reportBufferSize)
-            entry.buffer.deallocate()
-        }
-        openInterfaces.removeAll()
-        viaDevice = nil
-
-        if let mgr = manager {
-            IOHIDManagerUnscheduleFromRunLoop(mgr, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
-            IOHIDManagerClose(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
-            manager = nil
-        }
-    }
-
     // Called from the device-matching callback once we know the device + kind.
     fileprivate func attach(device: IOHIDDevice, kind: QuakeDeviceKind) {
         let vid = (IOHIDDeviceGetProperty(device, kIOHIDVendorIDKey as CFString) as? Int) ?? -1
@@ -202,14 +176,6 @@ final class QuakeInputReader: ObservableObject {
     private func openAttempt(device: IOHIDDevice, kind: QuakeDeviceKind,
                              vid: Int, pid: Int, usagePage: Int, usage: Int, tries: Int) {
         let id = String(format: "%04X:%04X up=0x%02X u=0x%02X", vid, pid, usagePage, usage)
-
-        // De-dup: an OS re-enumeration can fire the matching callback twice for the same
-        // interface. Opening it again would leak a second handle/buffer and double the writes.
-        if openInterfaces.contains(where: { $0.device === device }) {
-            log("skip duplicate open \(id) — interface already open")
-            return
-        }
-
         let r = IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeNone))
         if r != kIOReturnSuccess {
             log("open DENIED \(id) (0x\(String(UInt32(bitPattern: r), radix: 16))) try \(tries)")
@@ -234,16 +200,14 @@ final class QuakeInputReader: ObservableObject {
         case .knob:  knobConnected = true
         case .touch: touchConnected = true
         }
-        // The OpenInterface keeps buf + tag alive for as long as the registration is live;
-        // detach(device:) tears all three down together.
-        openInterfaces.append(OpenInterface(kind: kind, device: device, buffer: buf, tag: tag))
+        openDevices.append(OpenDevice(kind: kind, device: device, buffer: buf, tag: tag))
         // Lock onto the VIA raw-HID interface for lighting. This is the ONE interface that
         // accepts QMK lighting commands; everything else under this VID/PID ignores them.
         if usagePage == 0xFF60 && usage == 0x61 {
             viaDevice = device
             log("VIA raw-HID interface READY \(id) — lighting will target this interface")
         }
-        log("attached \(kind) \(id) (\(openInterfaces.count) interface(s) open)")
+        log("attached \(kind) \(id) (\(openDevices.count) interface(s) open)")
 
         // Light the panel AND start the keep-alive heartbeat. The Quake firmware blanks
         // the HDMI display if it doesn't receive a periodic ping (DK-Suite sends it every
@@ -258,42 +222,37 @@ final class QuakeInputReader: ObservableObject {
         }
     }
 
-    // Called from the removal callback. Fully releases everything we allocated for this exact
-    // interface: deregister the input-report callback, close the IOHIDDevice, free the buffer,
-    // and drop the OpenInterface (which also releases its DeviceTag). Without this, every
-    // unplug/replug leaked a handle + buffer and sendPing()/setLuminance() kept writing to a
-    // dead handle forever.
-    fileprivate func detach(device: IOHIDDevice) {
-        guard let idx = openInterfaces.firstIndex(where: { $0.device === device }) else {
-            log("detach: no open interface matched the removed device")
-            return
-        }
-        let entry = openInterfaces[idx]
-
-        // Deregister BEFORE closing/freeing so IOKit stops handing reports into a freed buffer.
-        IOHIDDeviceRegisterInputReportCallback(device, entry.buffer, reportBufferSize, nil, nil)
-        IOHIDDeviceClose(device, IOOptionBits(kIOHIDOptionsTypeNone))
-        entry.buffer.deinitialize(count: reportBufferSize)
-        entry.buffer.deallocate()
-
-        openInterfaces.remove(at: idx)
-
-        switch entry.kind {
-        case .knob:  knobConnected = false
-        case .touch: touchConnected = false; touchPoint = nil
-        }
-        // The VIA interface lives under the knob's VID/PID; clear it only if THIS device was it.
-        if viaDevice === device { viaDevice = nil }
-
-        log("detached \(entry.kind) (\(openInterfaces.count) interface(s) open)")
-
-        // Once nothing is open (or the knob is gone), re-arm wake + keep-alive so the NEXT
-        // attach re-wakes the panel against the fresh handle instead of staying dark.
-        if openInterfaces.isEmpty || !openInterfaces.contains(where: { $0.kind == .knob }) {
+    fileprivate func markRemoved(device: IOHIDDevice, kind: QuakeDeviceKind) {
+        detach(device: device)
+        knobConnected = openDevices.contains { $0.kind == .knob }
+        touchConnected = openDevices.contains { $0.kind == .touch }
+        if !touchConnected { touchPoint = nil }
+        if openDevices.isEmpty {
             wakeAttempted = false
-            keepAliveTimer?.invalidate()
-            keepAliveTimer = nil
+            stopKeepAlive()
         }
+    }
+
+    private func detach(device: IOHIDDevice) {
+        var removed: [OpenDevice] = []
+        openDevices.removeAll { entry in
+            let match = sameDevice(entry.device, device)
+            if match { removed.append(entry) }
+            return match
+        }
+
+        for entry in removed {
+            if let via = viaDevice, sameDevice(via, entry.device) { viaDevice = nil }
+            IOHIDDeviceRegisterInputReportCallback(entry.device, entry.buffer, 0, nil, nil)
+            IOHIDDeviceClose(entry.device, IOOptionBits(kIOHIDOptionsTypeNone))
+            entry.buffer.deinitialize(count: reportBufferSize)
+            entry.buffer.deallocate()
+        }
+        log("detached \(removed.count) HID interface(s); \(openDevices.count) still open")
+    }
+
+    private func sameDevice(_ lhs: IOHIDDevice, _ rhs: IOHIDDevice) -> Bool {
+        CFEqual(lhs, rhs)
     }
 
     // MARK: Report handling (runs on main run loop)
@@ -356,6 +315,8 @@ final class QuakeInputReader: ObservableObject {
 
         if contact == 0x00 {
             liftWork?.cancel()
+            sessionResetWork?.cancel()
+            contactSessionActive = false
             touchPoint = nil
             emit(.touchEnded)
             lastEvent = "touch ↑"
@@ -364,7 +325,9 @@ final class QuakeInputReader: ObservableObject {
         }
 
         let p = calibration.normalize(panelX: Double(x), panelY: Double(y))
-        let began = (touchPoint == nil)
+        sessionResetWork?.cancel()
+        let began = !contactSessionActive
+        contactSessionActive = true
         touchPoint = p
         emit(began ? .touchBegan(p) : .touchMoved(p))
         lastEvent = String(format: "touch (%d,%d) → (%.2f,%.2f)", x, y, p.x, p.y)
@@ -378,6 +341,12 @@ final class QuakeInputReader: ObservableObject {
             self.touchPoint = nil
             self.emit(.touchEnded)
             self.lastEvent = "touch ↑ (gap)"
+            let reset = DispatchWorkItem { [weak self] in
+                guard let self, self.touchPoint == nil else { return }
+                self.contactSessionActive = false
+            }
+            self.sessionResetWork = reset
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: reset)
         }
         liftWork = w
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: w)
@@ -412,9 +381,15 @@ final class QuakeInputReader: ObservableObject {
         log("keep-alive started — ping A3 02 02 EF F1 every 10s")
     }
 
+    private func stopKeepAlive() {
+        keepAliveTimer?.invalidate()
+        keepAliveTimer = nil
+        log("keep-alive stopped — no HID interfaces open")
+    }
+
     func sendPing() {
         let frame = a3Frame(opcode: 0x02, data: [0xEF])   // → A3 02 02 EF F1
-        for entry in openInterfaces { writeOutput(frame, to: entry.device) }
+        for entry in openDevices { writeOutput(frame, to: entry.device) }
     }
 
     /// Set the panel backlight via the device's native 0xA3 command.
@@ -425,10 +400,10 @@ final class QuakeInputReader: ObservableObject {
         luminance = v
         let frame = a3Frame(opcode: 0x01, data: [0x05, UInt8(v)])
         var ok = 0
-        for entry in openInterfaces where writeOutput(frame, to: entry.device) { ok += 1 }
+        for entry in openDevices where writeOutput(frame, to: entry.device) { ok += 1 }
         log(String(format: "luminance %d → [%@] to %d/%d iface(s)", v,
                    frame.map { String(format: "%02X", $0) }.joined(separator: " "),
-                   ok, openInterfaces.count))
+                   ok, openDevices.count))
     }
 
     // MARK: Knob RGB ring (QMK VIA, RGB-Matrix custom channel 3)
@@ -602,9 +577,9 @@ private let quakeDeviceAdded: IOHIDDeviceCallback = { context, _, _, device in
 private let quakeDeviceRemoved: IOHIDDeviceCallback = { context, _, _, device in
     guard let context else { return }
     let reader = Unmanaged<QuakeInputReader>.fromOpaque(context).takeUnretainedValue()
-    // Match on the exact IOHIDDevice instance IOKit hands back (=== identity), so we tear down
-    // the right interface and free its handle/buffer instead of just flipping a flag.
-    reader.detach(device: device)
+    let vid = (IOHIDDeviceGetProperty(device, kIOHIDVendorIDKey as CFString) as? Int) ?? -1
+    if vid == QuakeIDs.knobVID { reader.markRemoved(device: device, kind: .knob) }
+    else if vid == QuakeIDs.touchVID { reader.markRemoved(device: device, kind: .touch) }
 }
 
 private let quakeReport: IOHIDReportCallback = { context, _, _, _, _, report, reportLength in

@@ -23,9 +23,11 @@ import Combine
 class PanelWeb: NSObject, WKNavigationDelegate {
     let web: WKWebView
     private(set) var loaded = false
+    private var htmlName: String
 
     /// Real panel size up front so first-paint layout is correct even while the webview is off-screen.
     init(html: String, configuration: WKWebViewConfiguration = WKWebViewConfiguration()) {
+        htmlName = html
         web = WKWebView(frame: CGRect(x: 0, y: 0, width: 1920, height: 480), configuration: configuration)
         super.init()
         web.navigationDelegate = self
@@ -33,6 +35,7 @@ class PanelWeb: NSObject, WKNavigationDelegate {
     }
 
     func load(html: String) {
+        htmlName = html
         loaded = false
         if let url = Bundle.main.url(forResource: html, withExtension: "html", subdirectory: "Web") {
             web.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
@@ -40,6 +43,11 @@ class PanelWeb: NSObject, WKNavigationDelegate {
     }
 
     func webView(_ w: WKWebView, didFinish n: WKNavigation!) { loaded = true; onReady() }
+
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        NSLog("[Quake] PanelWeb: WebContent process terminated for \(htmlName); reloading")
+        load(html: htmlName)
+    }
 
     func eval(_ js: String) { web.evaluateJavaScript(js, completionHandler: nil) }
 

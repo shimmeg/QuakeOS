@@ -39,6 +39,7 @@ final class SpotifyClient: ObservableObject {
     }
 
     private var timer: Timer?
+    private var pollBusy = false
 
     /// When Spotify rate-limits us (HTTP 429), skip all player calls until this time —
     /// hammering through a 429 only makes Spotify extend the ban.
@@ -52,8 +53,8 @@ final class SpotifyClient: ObservableObject {
 
     func start() {
         // Always poll; calls are no-ops until a token exists, then pick up automatically.
+        guard timer == nil else { return }
         poll()
-        timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in self?.poll() }
     }
 
@@ -62,10 +63,17 @@ final class SpotifyClient: ObservableObject {
     private var pollTick = 0
     private func poll() {
         if let until = rateLimitedUntil, Date() < until { return }   // backing off after a 429
-        fetchNowPlaying()                       // ONE /me/player call: now-playing + state + device
+        guard !pollBusy else { return }
+        pollBusy = true
+        let shouldFetchQueue = pollTick % 3 == 0
+        let shouldFetchDevices = deviceID == nil
         pollTick &+= 1
-        if pollTick % 3 == 0 { fetchQueue() }   // queue changes slowly — fetch every ~9s, not every 3s
-        if deviceID == nil { fetchDevices() }   // only until we learn a device
+        fetchNowPlaying { [weak self] in        // ONE /me/player call: now-playing + state + device
+            guard let self else { return }
+            self.pollBusy = false
+            if shouldFetchQueue { self.fetchQueue() }       // queue changes slowly — fetch every ~9s
+            if shouldFetchDevices { self.fetchDevices() }   // only until we learn a device
+        }
     }
 
     private func fetchDevices() {
@@ -81,8 +89,9 @@ final class SpotifyClient: ObservableObject {
     /// One consolidated /me/player call — returns now-playing track, play state, shuffle,
     /// repeat, progress, context AND the active device, replacing the 3 separate calls that
     /// were tripping Spotify's rate limit.
-    private func fetchNowPlaying() {
+    private func fetchNowPlaying(completion: (() -> Void)? = nil) {
         get("/me/player") { [weak self] json in
+            defer { completion?() }
             guard let self else { return }
             // 204/empty = nothing active on any device; keep last-known and bail.
             guard let json, let item = json["item"] as? [String: Any] else { return }

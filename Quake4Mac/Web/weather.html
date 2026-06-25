@@ -70,12 +70,13 @@
   .nowmap{flex:1;min-height:0;border-radius:12px;overflow:hidden;position:relative;border:1px solid rgba(255,255,255,.06);}
   #precipmap{position:absolute;inset:0;}
   .maplabel{position:absolute;top:6px;left:8px;z-index:600;font-size:13px;color:#cfd6e2;background:rgba(0,0,0,.45);padding:2px 8px;border-radius:6px;}
+  .mapfallback{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;
+    color:rgba(234,246,255,.58);font-size:15px;line-height:1.35;padding:22px;background:
+    radial-gradient(70% 70% at 50% 50%,rgba(90,169,255,.16),transparent 70%),#08101a;}
   .hh{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;}
   .hh::-webkit-scrollbar{display:none;}
   .hh .c{flex:0 0 60px;}
 </style>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
   <div id="stage"><div class="err">Loading weather…</div></div>
@@ -83,6 +84,11 @@
 (function(){
   var cfg = { locations:[], unit:'fahrenheit', useCurrent:true, current:null };
   var list = [], idx = 0, rendered = false, rvFrames = null;
+  function escHTML(value){
+    return String(value == null ? '' : value).replace(/[&<>"']/g, function(ch){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
+    });
+  }
 
   // RainViewer latest radar frame (free, no key)
   async function rvLatest(){
@@ -95,7 +101,11 @@
   }
   var _map=null;
   async function initPrecip(loc){
-    var el=document.getElementById('precipmap'); if(!el || typeof L==='undefined') return;
+    var el=document.getElementById('precipmap'); if(!el) return;
+    if(typeof L==='undefined'){
+      el.innerHTML='<div class="mapfallback">Radar map disabled until Leaflet is bundled locally.</div>';
+      return;
+    }
     if(_map){ try{ _map.remove(); }catch(e){} _map=null; }   // tear down the previous map before re-creating
     try{
       _map = L.map(el,{zoomControl:false,attributionControl:false,dragging:false,scrollWheelZoom:false,doubleClickZoom:false,boxZoom:false,keyboard:false,touchZoom:false,tap:false}).setView([loc.lat,loc.lon],7);
@@ -168,7 +178,7 @@
 
   async function load(){
     var loc=list[idx]; if(!loc) return;
-    if(!rendered) show('<div class="err">Loading '+loc.name+'…</div>');   // splash only on the very first load
+    if(!rendered) show('<div class="err">Loading '+escHTML(loc.name)+'…</div>');   // splash only on the very first load
     try{
       var u=cfg.unit==='fahrenheit'?'fahrenheit':'celsius';
       var wsu=u==='fahrenheit'?'mph':'kmh';
@@ -189,7 +199,7 @@
 
     // current column: conditions on top, precipitation map on the bottom
     var nowCol='<div class="col now">'
-      +'<div class="nowtop"><div class="city">'+(loc.current?'📍 ':'')+loc.name+'</div>'
+      +'<div class="nowtop"><div class="city">'+(loc.current?'📍 ':'')+escHTML(loc.name)+'</div>'
       +'<div class="t"><span class="ico">'+ico(c.weather_code,c.is_day)+'</span><span class="temp">'+rnd(c.temperature_2m)+'°</span></div>'
       +'<div class="cond">'+wx(c.weather_code)+'</div>'
       +'<div class="hl">H:'+rnd(D.temperature_2m_max[0])+'°  L:'+rnd(D.temperature_2m_min[0])+'°  ·  Feels '+rnd(c.apparent_temperature)+'°</div></div>'

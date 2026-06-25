@@ -81,7 +81,12 @@ struct WeatherWebView: NSViewRepresentable {
         private var loaded = false
         private var pending: (CGFloat, String)?
         func webView(_ w: WKWebView, didFinish n: WKNavigation!) { loaded = true; if let p = pending { apply(zoom: p.0, config: p.1) } }
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            loaded = false
+            webView.reload()
+        }
         func apply(zoom: CGFloat, config: String) {
+            pending = (zoom, config)
             guard loaded, let web = web else { pending = (zoom, config); return }
             web.evaluateJavaScript("window.WEATHER && window.WEATHER.set(\(config));", completionHandler: nil)
             if abs(zoom - 1) > 0.001 { web.evaluateJavaScript("document.documentElement.style.zoom='\(zoom)';", completionHandler: nil) }
@@ -108,6 +113,11 @@ final class WeatherWeb: NSObject, WKNavigationDelegate {
         web = WKWebView(frame: CGRect(x: 0, y: 0, width: 1920, height: 480), configuration: WKWebViewConfiguration())
         super.init()
         web.navigationDelegate = self
+        loadLocalPage()
+    }
+
+    private func loadLocalPage() {
+        loaded = false
         if let url = Bundle.main.url(forResource: "weather", withExtension: "html", subdirectory: "Web") {
             web.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
         }
@@ -115,7 +125,6 @@ final class WeatherWeb: NSObject, WKNavigationDelegate {
 
     /// Build + load + render at app launch so the very first open shows finished content (no splash).
     func warm() {
-        LocationService.shared.request()
         apply(config: WeatherWeb.currentConfig())
     }
 
@@ -131,6 +140,13 @@ final class WeatherWeb: NSObject, WKNavigationDelegate {
     }
 
     func webView(_ w: WKWebView, didFinish n: WKNavigation!) { loaded = true; pushIfChanged(force: true); scheduleRectRefresh() }
+
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        NSLog("[Quake] WeatherWeb: WebContent process terminated; reloading")
+        lastConfig = ""
+        hourlyRect = nil
+        loadLocalPage()
+    }
 
     func apply(config: String) { pendingConfig = config; if loaded { pushIfChanged(force: false) } }
 

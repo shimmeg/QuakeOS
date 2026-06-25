@@ -151,7 +151,13 @@ struct ClockWebView: NSViewRepresentable {
             if let p = pending { apply(zoom: p.0, config: p.1) }
         }
 
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            loaded = false
+            webView.reload()
+        }
+
         func apply(zoom: CGFloat, config: String) {
+            pending = (zoom, config)
             guard loaded, let web = web else { pending = (zoom, config); return }
             web.evaluateJavaScript("window.CLOCK && window.CLOCK.set(\(config));", completionHandler: nil)
             if abs(zoom - 1) > 0.001 {
@@ -182,12 +188,43 @@ struct WebDashboardView: View {
 
 struct WebDashboardWeb: NSViewRepresentable {
     let urlString: String
+    func makeCoordinator() -> Coordinator { Coordinator(urlString: urlString) }
     func makeNSView(context: Context) -> WKWebView {
         let web = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
-        if let u = URL(string: urlString) { web.load(URLRequest(url: u)) }
+        web.navigationDelegate = context.coordinator
+        context.coordinator.web = web
+        context.coordinator.load()
         return web
     }
-    func updateNSView(_ web: WKWebView, context: Context) {}
+    func updateNSView(_ web: WKWebView, context: Context) { context.coordinator.update(urlString: urlString) }
+
+    final class Coordinator: NSObject, WKNavigationDelegate {
+        weak var web: WKWebView?
+        private var urlString: String
+
+        init(urlString: String) {
+            self.urlString = urlString
+        }
+
+        func update(urlString: String) {
+            guard self.urlString != urlString else { return }
+            self.urlString = urlString
+            load()
+        }
+
+        func load() {
+            guard let web else { return }
+            guard let u = MacroActionExecutor.webURL(from: urlString) else {
+                web.loadHTMLString("", baseURL: nil)
+                return
+            }
+            web.load(URLRequest(url: u))
+        }
+
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            load()
+        }
+    }
 }
 
 // MARK: - Clock settings (Settings panel for the Clock prebuilt panel)
