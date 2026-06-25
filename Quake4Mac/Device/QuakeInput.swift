@@ -88,7 +88,7 @@ final class QuakeInputReader: ObservableObject {
     var lastRawTouch: (x: Int, y: Int)? = nil
     @Published var knobConnected = false
     @Published var touchConnected = false
-    @Published var luminance: Int = 255      // device panel backlight, 0–255 (0xA3 cmd 5)
+    @Published var luminance: Int = 255      // requested panel brightness, 1–255
 
     /// Verbose per-event / per-HID-write logging — only when Developer Mode is on. Keeps the stderr
     /// syscalls + hex `String(format:)` off the knob/touch/RGB hot paths in normal operation.
@@ -115,8 +115,11 @@ final class QuakeInputReader: ObservableObject {
     private var viaDevice: IOHIDDevice?
     private var wakeAttempted = false
     private var liftWork: DispatchWorkItem?
-    private var sessionResetWork: DispatchWorkItem?
     private var contactSessionActive = false
+    private let inferredLiftDelay: TimeInterval = 0.075
+    private let samePointContinuationWindow: TimeInterval = 0.10
+    private let samePointContinuationDistance: CGFloat = 0.045
+    private var lastInferredLift: (point: CGPoint, time: TimeInterval)?
     private let reportBufferSize = 64
     private var viaProbing = false
     private var probeQueue: [[UInt8]] = []
@@ -168,7 +171,6 @@ final class QuakeInputReader: ObservableObject {
         keepAliveTimer?.invalidate()
         keepAliveTimer = nil
         liftWork?.cancel()
-        sessionResetWork?.cancel()
 
         let entries = openDevices
         openDevices.removeAll()
@@ -242,14 +244,14 @@ final class QuakeInputReader: ObservableObject {
         }
         log("attached \(kind) \(id) (\(openDevices.count) interface(s) open)")
 
-        // Light the panel AND start the keep-alive heartbeat. The Quake firmware blanks
+        // Start the keep-alive heartbeat. The Quake firmware blanks
         // the HDMI display if it doesn't receive a periodic ping (DK-Suite sends it every
         // 15s; without it the panel times out after ~15-30s and goes black). THIS, not our
         // rendering, was the "random black-out".
         if !wakeAttempted {
             wakeAttempted = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak self] in
-                self?.wakePanel()        // backlight on (A3 03 01 05 FF 06)
+                self?.wakePanel()
                 self?.startKeepAlive()   // begin the ping that keeps it showing HDMI
             }
         }
@@ -353,8 +355,8 @@ final class QuakeInputReader: ObservableObject {
 
         if contact == 0x00 {
             liftWork?.cancel()
-            sessionResetWork?.cancel()
             contactSessionActive = false
+            lastInferredLift = nil
             touchPoint = nil
             emit(.touchEnded)
             lastEvent = "touch ↑"
@@ -363,8 +365,7 @@ final class QuakeInputReader: ObservableObject {
         }
 
         let p = calibration.normalize(panelX: Double(x), panelY: Double(y))
-        sessionResetWork?.cancel()
-        let began = !contactSessionActive
+        let began = shouldBeginTouchSession(at: p)
         contactSessionActive = true
         touchPoint = p
         emit(began ? .touchBegan(p) : .touchMoved(p))
@@ -379,30 +380,41 @@ final class QuakeInputReader: ObservableObject {
         // no further reports as a lift. This makes each discrete tap re-register.
         liftWork?.cancel()
         let w = DispatchWorkItem { [weak self] in
-            guard let self, self.touchPoint != nil else { return }
+            guard let self, let liftedPoint = self.touchPoint else { return }
             self.touchPoint = nil
+            self.contactSessionActive = false
+            self.lastInferredLift = (liftedPoint, ProcessInfo.processInfo.systemUptime)
             self.emit(.touchEnded)
             self.lastEvent = "touch ↑ (gap)"
-            let reset = DispatchWorkItem { [weak self] in
-                guard let self, self.touchPoint == nil else { return }
-                self.contactSessionActive = false
-            }
-            self.sessionResetWork = reset
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: reset)
         }
         liftWork = w
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: w)
+        DispatchQueue.main.asyncAfter(deadline: .now() + inferredLiftDelay, execute: w)
     }
 
-    // MARK: Outgoing — panel backlight / wake
-    //
-    // DecoKee sets the LCD backlight with a 0xA1 JSON frame {type:brightness, level:0..6}.
-    // The panel stays dark until it receives this — which is exactly why a freshly
-    // plugged-in Quake shows nothing. We don't yet know which of the device's HID
-    // interfaces accepts it, so we write to every one we managed to open (harmless
-    // shotgun) and let the knob sweep the level live to find what lights it.
+    private func shouldBeginTouchSession(at point: CGPoint) -> Bool {
+        guard !contactSessionActive else { return false }
+        guard let last = lastInferredLift else { return true }
+        lastInferredLift = nil
 
-    func wakePanel() { setLuminance(255) }
+        let elapsed = ProcessInfo.processInfo.systemUptime - last.time
+        guard elapsed <= samePointContinuationWindow else { return true }
+
+        let dx = abs(point.x - last.point.x)
+        let dy = abs(point.y - last.point.y)
+        return dx > samePointContinuationDistance || dy > samePointContinuationDistance
+    }
+
+    // MARK: Outgoing — panel wake / requested brightness
+    //
+    // The real LCD backlight protocol/interface is still unverified on this unit.
+    // The previous interactive path wrote a guessed 0xA3 frame synchronously to every open HID
+    // interface; on hardware it did not change brightness and could stall touch handling after
+    // Screen +/- taps. Keep UI state responsive until the actual protocol is confirmed.
+
+    func wakePanel() {
+        luminance = 255
+        log("wake requested — hardware brightness command disabled until protocol is verified")
+    }
 
     // MARK: Keep-alive heartbeat
     //
@@ -436,18 +448,11 @@ final class QuakeInputReader: ObservableObject {
         for entry in openDevices { writeOutput(frame, to: entry.device) }
     }
 
-    /// Set the panel backlight via the device's native 0xA3 command.
-    /// Reverse-engineered from DK-Suite: `sendShortCMD(sn, l(163,[5,value],1))`.
-    /// On the wire (report id 0): A3 03 01 05 <value> <(1+5+value)%255>, value 1–255.
+    /// Store the requested panel brightness without sending the unverified hardware command.
     func setLuminance(_ value: Int) {
         let v = min(255, max(1, value))
         luminance = v
-        let frame = a3Frame(opcode: 0x01, data: [0x05, UInt8(v)])
-        var ok = 0
-        for entry in openDevices where writeOutput(frame, to: entry.device) { ok += 1 }
-        log(String(format: "luminance %d → [%@] to %d/%d iface(s)", v,
-                   frame.map { String(format: "%02X", $0) }.joined(separator: " "),
-                   ok, openDevices.count))
+        log("luminance \(v) stored — hardware brightness command disabled until protocol is verified")
     }
 
     // MARK: Knob RGB ring (QMK VIA, RGB-Matrix custom channel 3)

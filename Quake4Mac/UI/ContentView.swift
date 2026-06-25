@@ -53,8 +53,20 @@ struct ContentView: View {
                 AppSwitcherView(recents: pad.recents, index: pad.switcherIndex)
                     .transition(.opacity)
             }
+
+            if softwareDimmingOpacity > 0 {
+                Color.black
+                    .opacity(softwareDimmingOpacity)
+                    .allowsHitTesting(false)
+                    .ignoresSafeArea()
+            }
         }
         .animation(.easeOut(duration: 0.18), value: pad.switcherOpen)
+    }
+
+    private var softwareDimmingOpacity: Double {
+        let level = Double(min(255, max(1, state.input.luminance))) / 255.0
+        return (1.0 - level) * 0.82
     }
 
     @ViewBuilder private func appContent(_ pad: PadModel) -> some View {

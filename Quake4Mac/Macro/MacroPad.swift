@@ -16,7 +16,7 @@ enum PadAction {
     case openURL(String)               // open a URL in the default browser
     case shell(String)                 // run a shell command (/bin/zsh -lc)
     case appleScript(String)           // run an AppleScript snippet
-    case luminance(delta: Int)         // nudge the Quake panel backlight
+    case luminance(delta: Int)         // nudge requested screen brightness
     case system(SystemAction)          // built-in, whitelisted macOS action
     case openPage(String)              // jump to another Quake page (by name)
     case none
