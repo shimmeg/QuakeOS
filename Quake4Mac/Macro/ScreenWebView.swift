@@ -140,6 +140,20 @@ struct ScreenWebView: NSViewRepresentable {
 // byte identical — the preview is literally the same renderer fed the same model.
 
 enum ScreenModel {
+    private final class IconInfoBox {
+        let url: String
+        let glow: String?
+        let app: Bool
+
+        init(url: String, glow: String?, app: Bool) {
+            self.url = url
+            self.glow = glow
+            self.app = app
+        }
+    }
+
+    private static let iconInfoCache = NSCache<NSString, IconInfoBox>()
+
     static func buildModelEnc(pages: [PadPage]) -> String? {
         var out: [[String: Any]] = []
         for page in pages {
@@ -162,17 +176,39 @@ enum ScreenModel {
     }
 
     static func iconInfo(for tile: Tile) -> (url: String, glow: String?, app: Bool)? {
+        let key: String
+        let image: NSImage
+        let fallbackGlow: String?
+        let app: Bool
+
         if let name = tile.image, let img = DecoAssets.icon(name) {                  // their PNG → neon glow in its own colour
-            guard let r = rasterize(img) else { return nil }
-            return ("data:image/png;base64,\(r.b64)", r.glow, false)
-        } else if let bid = tile.appBundleID, let app = DecoAssets.appIcon(bid) {    // real app icon → full colour
-            guard let r = rasterize(app) else { return nil }
-            return ("data:image/png;base64,\(r.b64)", r.glow, true)
-        } else if let img = symbol(tile.symbol, color: NSColor(tile.tint)) {         // tinted SF Symbol → neon glow
-            guard let r = rasterize(img) else { return nil }
-            return ("data:image/png;base64,\(r.b64)", r.glow ?? hex(NSColor(tile.tint)), false)
+            key = "image:\(name)"
+            image = img
+            fallbackGlow = nil
+            app = false
+        } else if let bid = tile.appBundleID, let img = DecoAssets.appIcon(bid) {    // real app icon → full colour
+            key = "app:\(bid)"
+            image = img
+            fallbackGlow = nil
+            app = true
+        } else {
+            key = "symbol:\(tile.symbol):\(tile.tint.hexRGB)"
+            if let cached = iconInfoCache.object(forKey: key as NSString) {
+                return (cached.url, cached.glow, cached.app)
+            }
+            guard let img = symbol(tile.symbol, color: NSColor(tile.tint)) else { return nil } // tinted SF Symbol → neon glow
+            image = img
+            fallbackGlow = hex(NSColor(tile.tint))
+            app = false
         }
-        return nil
+
+        if let cached = iconInfoCache.object(forKey: key as NSString) {
+            return (cached.url, cached.glow, cached.app)
+        }
+        guard let r = rasterize(image) else { return nil }
+        let box = IconInfoBox(url: "data:image/png;base64,\(r.b64)", glow: r.glow ?? fallbackGlow, app: app)
+        iconInfoCache.setObject(box, forKey: key as NSString)
+        return (box.url, box.glow, box.app)
     }
 
     static func symbol(_ name: String, color: NSColor) -> NSImage? {

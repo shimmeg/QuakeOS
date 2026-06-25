@@ -382,6 +382,7 @@ final class RGBReactiveEngine: ObservableObject {
     private var revert: DispatchWorkItem?
     private var viz: AnyObject?
     private var vizTap: AnyObject?      // Core Audio process tap (macOS 14.4+, DRM-safe)
+    private var lastVizFrame: (hue: Int, bright: Int)?
 
     // Music source state
     private var musicSub: AnyCancellable?
@@ -504,17 +505,24 @@ final class RGBReactiveEngine: ObservableObject {
     // source (visualizer / album / page theme); else the user's static look.
     func applyBase() {
         if cpuAlerting { return }                                  // a heat pulse is showing — leave it
-        guard enabled else { RGBController.shared.applyAll(); return }
+        guard enabled else {
+            lastVizFrame = nil
+            RGBController.shared.applyAll()
+            return
+        }
         switch winningSource() {
         case .visualizer:
+            lastVizFrame = nil
             return                                                 // the visualizer paints itself live
         case .album:
+            lastVizFrame = nil
             if let (h, s) = musicHueSat {
                 input?.rgbSetEffect(1)
                 input?.rgbSetColor(hue: h, sat: s)
                 input?.rgbSetBrightness(Int(RGBController.shared.brightness))
             }
         case .page:
+            lastVizFrame = nil
             if let pad = pad {
                 let (h, s) = RGBReactiveEngine.hsv(pageThemeColor(pad.currentScreenTitle))
                 input?.rgbSetEffect(1)
@@ -522,12 +530,14 @@ final class RGBReactiveEngine: ObservableObject {
                 input?.rgbSetBrightness(Int(RGBController.shared.brightness))
             }
         case nil:
+            lastVizFrame = nil
             RGBController.shared.applyAll()                        // static preset
         }
     }
 
     private func flash(_ color: Color) {
         let (h, s) = RGBReactiveEngine.hsv(color)
+        lastVizFrame = nil
         // Always re-assert Solid here. (We tried skipping this when RGBLiveState.effect==1, but that
         // mirror tracks the last-ATTEMPTED send and defaults to 1, so after a cold boot / reattach where
         // the effect write was dropped the ring can physically be on a saved non-solid effect while the
@@ -549,6 +559,7 @@ final class RGBReactiveEngine: ObservableObject {
     private func startViz() {
         guard viz == nil else { return }
         guard #available(macOS 13.0, *) else { return }
+        lastVizFrame = nil
         let v = AudioVisualizer()
         v.sensitivity = Float(vizSensitivity); v.floor = Float(vizFloor); v.tail = Float(vizTail)
         v.onUpdate = { [weak self] hue, bright in self?.applyViz(hue: hue, bright: bright) }
@@ -576,10 +587,13 @@ final class RGBReactiveEngine: ObservableObject {
         vizTap = nil
         if #available(macOS 13.0, *), let v = viz as? AudioVisualizer { v.stop() }
         viz = nil
+        lastVizFrame = nil
     }
     private func applyViz(hue: Int, bright: Int) {
         // Only paint when the visualizer is actually the winning source and no heat pulse is up.
         guard enabled, !cpuAlerting, winningSource() == .visualizer else { return }
+        if let last = lastVizFrame, abs(last.hue - hue) < 2, abs(last.bright - bright) < 3 { return }
+        lastVizFrame = (hue, bright)
         input?.rgbSetColor(hue: hue, sat: 255)
         input?.rgbSetBrightness(bright)
     }

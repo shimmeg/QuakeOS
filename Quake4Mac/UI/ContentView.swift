@@ -168,14 +168,23 @@ private struct Wallpaper: View {
 // MARK: - Tile asset resolution (used by the WebView screen)
 
 enum DecoAssets {
+    private static let iconCache = NSCache<NSString, NSImage>()
+    private static let appIconCache = NSCache<NSString, NSImage>()
+
     /// DecoKee glyph PNG bundled under Icons/.
     static func icon(_ name: String) -> NSImage? {
+        if let cached = iconCache.object(forKey: name as NSString) { return cached }
         guard let url = Bundle.main.url(forResource: name, withExtension: "png", subdirectory: "Icons") else { return nil }
-        return NSImage(contentsOf: url)
+        guard let image = NSImage(contentsOf: url) else { return nil }
+        iconCache.setObject(image, forKey: name as NSString)
+        return image
     }
     /// The real macOS icon for an installed app.
     static func appIcon(_ bundleID: String) -> NSImage? {
+        if let cached = appIconCache.object(forKey: bundleID as NSString) { return cached }
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
-        return NSWorkspace.shared.icon(forFile: url.path)
+        let image = NSWorkspace.shared.icon(forFile: url.path)
+        appIconCache.setObject(image, forKey: bundleID as NSString)
+        return image
     }
 }

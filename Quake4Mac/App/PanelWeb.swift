@@ -6,8 +6,8 @@
 // showed a loading/splash flash and any in-page data had to be re-fetched. Apple's own Weather app
 // never does this. Instead we build each panel's webview ONCE at app launch (PanelWarmer.warmAll),
 // keep it alive forever, and just reparent it into whatever container is on screen. Opening a panel
-// is then instant (the page is already rendered) and the page's own timers keep it fresh in the
-// background, so switching back never needs a reload.
+// is then instant (the page is already rendered). Panels that are cheap to keep active can refresh
+// in the background; heavier samplers can idle while hidden and resume on show.
 //
 // PanelWeb is the shared base (load-once + reparent + JS eval + touch hooks). Each panel subclasses
 // it for its config push + gestures. PanelWebHost is the thin SwiftUI bridge that reparents the
@@ -104,11 +104,24 @@ final class ClockWeb: PanelWeb {
     static let shared = ClockWeb()
     private var lastConfig = ""
     private var startX: CGFloat?, lastX: CGFloat?
+    private var visible = false
 
     init() { super.init(html: "clock") }
 
-    override func onReady() { lastConfig = ""; push() }
-    override func onShow() { push() }
+    override func onReady() {
+        lastConfig = ""
+        push()
+        setActive(visible)
+    }
+    override func onShow() {
+        visible = true
+        push()
+        setActive(true)
+    }
+    override func onHide() {
+        visible = false
+        setActive(false)
+    }
 
     private func push() {
         guard loaded else { return }
@@ -116,6 +129,10 @@ final class ClockWeb: PanelWeb {
         if cfg == lastConfig { return }       // only re-render when the config actually changed
         lastConfig = cfg
         eval("window.CLOCK && window.CLOCK.set(\(cfg));")
+    }
+    private func setActive(_ active: Bool) {
+        guard loaded else { return }
+        eval("window.CLOCK && window.CLOCK.setActive(\(active));")
     }
 
     override func touchBegan(_ p: CGPoint) { startX = p.x; lastX = p.x }
@@ -141,6 +158,7 @@ final class MonitorWeb: PanelWeb {
     private var lastTouch: CGPoint?
     private var lastJSON = ""
     private var pushScheduled = false
+    private var visible = false
 
     init() {
         super.init(html: "monitor")
@@ -158,9 +176,16 @@ final class MonitorWeb: PanelWeb {
     // (plus system_profiler/du periodically); previously it ran forever from launch even if the panel
     // was never opened or the display was asleep. start()/stop() are idempotent — same pattern the
     // standalone SystemMonitorView already uses via onAppear/onDisappear.
-    override func onReady() { lastJSON = ""; push() }
-    override func onShow() { stats.start(); push() }
-    override func onHide() { stats.stop() }
+    override func onReady() { lastJSON = ""; if visible { push() } }
+    override func onShow() {
+        visible = true
+        stats.start()
+        push()
+    }
+    override func onHide() {
+        visible = false
+        stats.stop()
+    }
 
     private func schedulePush() {
         guard !pushScheduled else { return }
@@ -173,7 +198,7 @@ final class MonitorWeb: PanelWeb {
     }
 
     private func push() {
-        guard loaded else { return }
+        guard loaded, visible else { return }
         let s = stats
         let dict: [String: Any] = [
             "cpu": ["load": s.cpuLoad, "temp": s.cpuTemp.map { $0 as Any } ?? NSNull()],

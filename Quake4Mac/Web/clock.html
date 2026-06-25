@@ -181,12 +181,20 @@
 
   function rebuild(){ if(cfg.layout==='grid') renderGrid(); else renderSingle(); }
 
-  var lastSec=-1;
-  function tick(){
+  var lastSec=-1, active=false, ticking=false;
+  function updateNow(){
     var hasAnalog = cfg.layout==='grid' || cfg.style==='analog';
     var s=new Date().getSeconds();
     if(s!==lastSec || hasAnalog){ lastSec=s; updaters.forEach(function(u){u();}); }
+  }
+  function tick(){
+    if(!active){ ticking=false; return; }
+    updateNow();
     requestAnimationFrame(tick);
+  }
+  function setClockActive(on){
+    active=!!on;
+    if(active && !ticking){ ticking=true; lastSec=-2; requestAnimationFrame(tick); }
   }
 
   window.CLOCK={
@@ -198,12 +206,13 @@
       if('seconds' in o) cfg.seconds=!!o.seconds;
       if('showDate' in o) cfg.showDate=!!o.showDate;
       if(o.accent) document.documentElement.style.setProperty('--accent',o.accent);
-      current=0; rebuild(); lastSec=-2; },
+      current=0; rebuild(); lastSec=-2; updateNow(); },
     flip:function(dir){ if(cfg.layout!=='single') return; var n=cfg.clocks.length||1; if(n<=1) return;
-      current=(current+(dir>0?1:-1)+n)%n; rebuild(); lastSec=-2; }
+      current=(current+(dir>0?1:-1)+n)%n; rebuild(); lastSec=-2; updateNow(); },
+    setActive:function(on){ setClockActive(on); }
   };
 
-  rebuild(); requestAnimationFrame(tick);
+  rebuild(); updateNow();
 })();
 </script>
 </body>
