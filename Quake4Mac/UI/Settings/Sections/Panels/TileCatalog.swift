@@ -47,6 +47,7 @@ struct TileSpec: Codable, Identifiable, Hashable {
         case .shell(let c):       actKind = "shell";   actStr = c
         case .appleScript(let x): actKind = "ascript"; actStr = x
         case .luminance(let d):   actKind = "lum";     actInt = d
+        case .system(let a):      actKind = "sys";     actStr = a.rawValue
         case .openPage(let n):    actKind = "page";    actStr = n
         case .none:               actKind = "none"
         }
@@ -59,6 +60,7 @@ struct TileSpec: Codable, Identifiable, Hashable {
         case "shell":   return .shell(actStr ?? "")
         case "ascript": return .appleScript(actStr ?? "")
         case "lum":     return .luminance(delta: actInt ?? 0)
+        case "sys":     return SystemAction(rawValue: actStr ?? "").map(PadAction.system) ?? .none
         case "page":    return .openPage(actStr ?? "")
         default:        return .none
         }

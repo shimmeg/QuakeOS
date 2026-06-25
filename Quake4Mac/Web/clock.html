@@ -20,7 +20,7 @@
   html,body{width:1920px;height:480px;overflow:hidden;background:var(--bg);
     font-family:-apple-system,"SF Pro Display","Helvetica Neue",Arial,sans-serif;
     -webkit-font-smoothing:antialiased;color:var(--ink);}
-  #stage{width:100%;height:100%;display:flex;align-items:center;justify-content:center;}
+  #stage{width:100%;height:100%;display:flex;align-items:center;justify-content:center;visibility:hidden;}
 
   /* single layout */
   .single-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;width:100%;height:100%;}
@@ -109,8 +109,9 @@
 
   // ---- flip helpers ----
   function makeFlipDigit(){ var d=document.createElement('div'); d.className='digit';
-    d.innerHTML='<div class="half top"><span class="v">0</span></div><div class="half bot"><span class="v">0</span></div><div class="leaf"><span class="v">0</span></div>'; d._cur='0'; return d; }
+    d.innerHTML='<div class="half top"><span class="v">0</span></div><div class="half bot"><span class="v">0</span></div><div class="leaf"><span class="v">0</span></div>'; d._cur=null; return d; }
   function setFlip(d,v){ if(d._cur===v)return; var top=d.querySelector('.top .v'),bot=d.querySelector('.bot .v'),leaf=d.querySelector('.leaf'),lv=leaf.querySelector('.v');
+    if(d._cur===null){ top.textContent=v; bot.textContent=v; lv.textContent=v; d._cur=v; return; }
     lv.textContent=d._cur; top.textContent=v; bot.textContent=d._cur; leaf.classList.remove('folddown'); void leaf.offsetWidth; leaf.classList.add('folddown');
     var done=function(){ bot.textContent=v; leaf.classList.remove('folddown'); lv.textContent=v; leaf.removeEventListener('animationend',done); }; leaf.addEventListener('animationend',done); d._cur=v; }
   function flipGroup(n){ var g=document.createElement('div'); g.className='group'; var a=[]; for(var i=0;i<n;i++){var d=makeFlipDigit(); g.appendChild(d); a.push(d);} return {el:g,d:a}; }
@@ -206,7 +207,7 @@
       if('seconds' in o) cfg.seconds=!!o.seconds;
       if('showDate' in o) cfg.showDate=!!o.showDate;
       if(o.accent) document.documentElement.style.setProperty('--accent',o.accent);
-      current=0; rebuild(); lastSec=-2; updateNow(); },
+      current=0; rebuild(); lastSec=-2; updateNow(); stage.style.visibility='visible'; },
     flip:function(dir){ if(cfg.layout!=='single') return; var n=cfg.clocks.length||1; if(n<=1) return;
       current=(current+(dir>0?1:-1)+n)%n; rebuild(); lastSec=-2; updateNow(); },
     setActive:function(on){ setClockActive(on); }

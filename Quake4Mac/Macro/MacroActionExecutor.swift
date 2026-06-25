@@ -49,6 +49,8 @@ enum MacroActionExecutor {
             )
         case .luminance(let delta):
             input.setLuminance(input.luminance + delta)
+        case .system(let action):
+            runSystem(action, log: log)
         case .openPage(let name):
             openPage(name)
         case .none:
@@ -79,6 +81,60 @@ enum MacroActionExecutor {
             return
         }
         runProcess(executable, arguments: arguments, label: label, log: log)
+    }
+
+    private static func runSystem(_ action: SystemAction, log: @escaping (String) -> Void) {
+        switch action {
+        case .activityMonitor:
+            openApp(bundleID: "com.apple.ActivityMonitor",
+                    fallbackPath: "/System/Applications/Utilities/Activity Monitor.app",
+                    label: "Activity Monitor",
+                    log: log)
+        case .missionControl:
+            openApp(bundleID: "com.apple.exposelauncher",
+                    fallbackPath: "/System/Applications/Mission Control.app",
+                    label: "Mission Control",
+                    log: log)
+        case .volumeUp:
+            runFixedAppleScript("set volume output volume ((output volume of (get volume settings)) + 12)",
+                                label: "volume up",
+                                log: log)
+        case .volumeDown:
+            runFixedAppleScript("set volume output volume ((output volume of (get volume settings)) - 12)",
+                                label: "volume down",
+                                log: log)
+        case .mute:
+            runFixedAppleScript("set volume output muted (not (output muted of (get volume settings)))",
+                                label: "mute",
+                                log: log)
+        }
+    }
+
+    private static func openApp(bundleID: String, fallbackPath: String, label: String,
+                                log: @escaping (String) -> Void) {
+        let fallback = URL(fileURLWithPath: fallbackPath)
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
+                ?? (FileManager.default.fileExists(atPath: fallback.path) ? fallback : nil) else {
+            log("system \(label) failed: app not found")
+            return
+        }
+        log("system \(label)")
+        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+    }
+
+    private static func runFixedAppleScript(_ source: String, label: String,
+                                            log: @escaping (String) -> Void) {
+        guard let script = NSAppleScript(source: source) else {
+            log("system \(label) failed: invalid script")
+            return
+        }
+        var error: NSDictionary?
+        script.executeAndReturnError(&error)
+        if let error {
+            log("system \(label) failed: \(error)")
+        } else {
+            log("system \(label) OK")
+        }
     }
 
     private static func runProcess(_ executable: String, arguments: [String], label: String,

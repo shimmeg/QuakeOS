@@ -17,8 +17,17 @@ enum PadAction {
     case shell(String)                 // run a shell command (/bin/zsh -lc)
     case appleScript(String)           // run an AppleScript snippet
     case luminance(delta: Int)         // nudge the Quake panel backlight
+    case system(SystemAction)          // built-in, whitelisted macOS action
     case openPage(String)              // jump to another Quake page (by name)
     case none
+}
+
+enum SystemAction: String {
+    case activityMonitor
+    case missionControl
+    case volumeUp
+    case volumeDown
+    case mute
 }
 
 // A page can be a tile grid (the default), a live web dashboard, or a bundled "app" screen
@@ -414,12 +423,9 @@ final class PadModel: ObservableObject {
             Tile(title: "Preview",  symbol: "doc.richtext",    tint: .blue,    action: .launchApp(bundleID: "com.apple.Preview")),
         ])
 
-        // Force Quit = ⌘⌥Esc ; Spotlight = ⌘Space ; volume via AppleScript.
+        // Force Quit = ⌘⌥Esc ; Spotlight = ⌘Space.
         let forceQuit = "tell application \"System Events\" to key code 53 using {command down, option down}"
         let spotlight = "tell application \"System Events\" to keystroke space using command down"
-        let volUp = "set volume output volume ((output volume of (get volume settings)) + 12)"
-        let volDown = "set volume output volume ((output volume of (get volume settings)) - 12)"
-        let muteToggle = "set volume output muted (not (output muted of (get volume settings)))"
         let micToggle = """
         set inputVol to input volume of (get volume settings)
         if inputVol > 0 then
@@ -434,17 +440,17 @@ final class PadModel: ObservableObject {
             Tile(title: "Screen +",   symbol: "sun.max.fill",   tint: .orange, action: .luminance(delta: 26),  image: "brightest"),
             Tile(title: "Screen –",   symbol: "sun.min.fill",   tint: .orange, action: .luminance(delta: -26), image: "darkest"),
             Tile(title: "Settings",   symbol: "gearshape.fill", tint: .gray,   action: .launchApp(bundleID: "com.apple.systempreferences"), image: "control_panel"),
-            Tile(title: "Activity",   symbol: "cpu",            tint: .green,  action: .shell("open -a 'Activity Monitor'"), image: "cpu_info"),
+            Tile(title: "Activity",   symbol: "cpu",            tint: .green,  action: .system(.activityMonitor), image: "cpu_info"),
             Tile(title: "Music",      symbol: "music.note",     tint: .pink,   action: .launchApp(bundleID: "com.apple.Music"), image: "media"),
             Tile(title: "Spotlight",  symbol: "magnifyingglass",tint: .blue,   action: .appleScript(spotlight), image: "global_search"),
             Tile(title: "Screenshot", symbol: "camera.viewfinder", tint: .teal, action: .shell("screencapture -i -c"), image: "clip_board"),
             Tile(title: "Downloads",  symbol: "folder.fill",    tint: .blue,   action: .shell("open ~/Downloads"), image: "folder"),
             Tile(title: "Force Quit", symbol: "xmark.octagon.fill", tint: .red, action: .appleScript(forceQuit), image: "force_quit"),
             Tile(title: "Sleep",      symbol: "moon.fill",      tint: .gray,   action: .shell("pmset displaysleepnow"), image: "lock_screen"),
-            Tile(title: "Vol +",      symbol: "speaker.wave.3.fill", tint: .indigo, action: .appleScript(volUp)),
-            Tile(title: "Vol –",      symbol: "speaker.wave.1.fill", tint: .indigo, action: .appleScript(volDown)),
-            Tile(title: "Mute",       symbol: "speaker.slash.fill",  tint: .purple, action: .appleScript(muteToggle), image: "buzzer_off"),
-            Tile(title: "Mission",    symbol: "rectangle.3.group.fill", tint: .teal, action: .shell("open -a 'Mission Control'")),
+            Tile(title: "Vol +",      symbol: "speaker.wave.3.fill", tint: .indigo, action: .system(.volumeUp)),
+            Tile(title: "Vol –",      symbol: "speaker.wave.1.fill", tint: .indigo, action: .system(.volumeDown)),
+            Tile(title: "Mute",       symbol: "speaker.slash.fill",  tint: .purple, action: .system(.mute), image: "buzzer_off"),
+            Tile(title: "Mission",    symbol: "rectangle.3.group.fill", tint: .teal, action: .system(.missionControl)),
             Tile(title: "Buzzer",     symbol: "bell.fill",      tint: .yellow, action: .none, image: "buzzer"),
             Tile(title: "Mic",        symbol: "mic.fill",       tint: .purple, action: .appleScript(micToggle), image: "device_mic"),
         ])
@@ -480,6 +486,7 @@ private extension PadAction {
         case .shell:              return "shell"
         case .appleScript:        return "appleScript"
         case .luminance(let d):   return "luminance(\(d))"
+        case .system(let action): return "system(\(action.rawValue))"
         case .openPage(let name): return "openPage(\(name))"
         case .none:               return "none"
         }
@@ -556,7 +563,28 @@ final class PadStore: ObservableObject {
         var out = input
         // Clock moved to a built-in panel — strip any old Clock page seeded into pages.json.
         out.removeAll { if case .app("clock") = $0.kind { return true }; return false }
+        out = out.map(normalizedSystemActions)
         return out.isEmpty ? PadModel.defaultPages() : out
+    }
+
+    private static func normalizedSystemActions(_ page: PadPage) -> PadPage {
+        guard page.name == "System" else { return page }
+        var page = page
+        page.tiles = page.tiles.map { tile in
+            guard !tile.editable else { return tile }
+            let action: PadAction
+            switch tile.title {
+            case "Activity": action = .system(.activityMonitor)
+            case "Mission":  action = .system(.missionControl)
+            case "Vol +":    action = .system(.volumeUp)
+            case "Vol –":    action = .system(.volumeDown)
+            case "Mute":     action = .system(.mute)
+            default:         return tile
+            }
+            return Tile(title: tile.title, symbol: tile.symbol, tint: tile.tint,
+                        action: action, image: tile.image, editable: tile.editable)
+        }
+        return page
     }
 }
 
@@ -571,6 +599,7 @@ private struct ActionDTO: Codable {
         case .shell(let c):       kind = "shell";   s = c
         case .appleScript(let x): kind = "ascript"; s = x
         case .luminance(let d):   kind = "lum";     i = d
+        case .system(let a):      kind = "sys";     s = a.rawValue
         case .openPage(let n):    kind = "page";    s = n
         case .none:               kind = "none"
         }
@@ -582,6 +611,7 @@ private struct ActionDTO: Codable {
         case "shell":   return .shell(s ?? "")
         case "ascript": return .appleScript(s ?? "")
         case "lum":     return .luminance(delta: i ?? 0)
+        case "sys":     return SystemAction(rawValue: s ?? "").map(PadAction.system) ?? .none
         case "page":    return .openPage(s ?? "")
         default:        return .none
         }

@@ -186,6 +186,7 @@ struct TileInspectorRail: View {
         case "shell":   return ("Runs an advanced shell macro", str)
         case "ascript": return ("Runs an advanced AppleScript macro", str)
         case "lum":     return ("Adjusts brightness by \((int ?? 0) >= 0 ? "+" : "")\(int ?? 0)", nil)
+        case "sys":     return ("Runs a built-in system action", str)
         case "page":    return ("Switches to the \(str ?? "—") page", nil)
         default:        return ("No action assigned yet", nil)
         }
@@ -238,6 +239,7 @@ struct TileInspectorRail: View {
         case "shell":   return .shell(eValue)
         case "ascript": return .appleScript(eValue)
         case "lum":     return .luminance(delta: eDelta)
+        case "sys":     return SystemAction(rawValue: eValue).map(PadAction.system) ?? .none
         case "page":    return .openPage(eValue)
         default:        return .none
         }
@@ -253,6 +255,7 @@ struct TileInspectorRail: View {
         case .shell(let c):       eKind = "shell";   eValue = c
         case .appleScript(let s): eKind = "ascript"; eValue = s
         case .luminance(let d):   eKind = "lum";     eDelta = d
+        case .system(let a):      eKind = "sys";     eValue = a.rawValue
         case .openPage(let n):    eKind = "page";    eValue = n
         case .none:               eKind = "none"
         }
