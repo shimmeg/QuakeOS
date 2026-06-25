@@ -25,9 +25,14 @@ enum PadAction {
 enum SystemAction: String {
     case activityMonitor
     case missionControl
+    case spotlight
+    case screenshot
+    case downloads
+    case forceQuit
     case volumeUp
     case volumeDown
     case mute
+    case micToggle
 }
 
 // A page can be a tile grid (the default), a live web dashboard, or a bundled "app" screen
@@ -423,18 +428,6 @@ final class PadModel: ObservableObject {
             Tile(title: "Preview",  symbol: "doc.richtext",    tint: .blue,    action: .launchApp(bundleID: "com.apple.Preview")),
         ])
 
-        // Force Quit = ⌘⌥Esc ; Spotlight = ⌘Space.
-        let forceQuit = "tell application \"System Events\" to key code 53 using {command down, option down}"
-        let spotlight = "tell application \"System Events\" to keystroke space using command down"
-        let micToggle = """
-        set inputVol to input volume of (get volume settings)
-        if inputVol > 0 then
-            set volume input volume 0
-        else
-            set volume input volume 50
-        end if
-        """
-
         // System page — uses DecoKee's OWN icon PNGs (image:) mapped to real macOS actions.
         let system = PadPage(name: "System", tiles: [
             Tile(title: "Screen +",   symbol: "sun.max.fill",   tint: .orange, action: .luminance(delta: 26),  image: "brightest"),
@@ -442,17 +435,17 @@ final class PadModel: ObservableObject {
             Tile(title: "Settings",   symbol: "gearshape.fill", tint: .gray,   action: .launchApp(bundleID: "com.apple.systempreferences"), image: "control_panel"),
             Tile(title: "Activity",   symbol: "cpu",            tint: .green,  action: .system(.activityMonitor), image: "cpu_info"),
             Tile(title: "Music",      symbol: "music.note",     tint: .pink,   action: .launchApp(bundleID: "com.apple.Music"), image: "media"),
-            Tile(title: "Spotlight",  symbol: "magnifyingglass",tint: .blue,   action: .appleScript(spotlight), image: "global_search"),
-            Tile(title: "Screenshot", symbol: "camera.viewfinder", tint: .teal, action: .shell("screencapture -i -c"), image: "clip_board"),
-            Tile(title: "Downloads",  symbol: "folder.fill",    tint: .blue,   action: .shell("open ~/Downloads"), image: "folder"),
-            Tile(title: "Force Quit", symbol: "xmark.octagon.fill", tint: .red, action: .appleScript(forceQuit), image: "force_quit"),
+            Tile(title: "Spotlight",  symbol: "magnifyingglass",tint: .blue,   action: .system(.spotlight), image: "global_search"),
+            Tile(title: "Screenshot", symbol: "camera.viewfinder", tint: .teal, action: .system(.screenshot), image: "clip_board"),
+            Tile(title: "Downloads",  symbol: "folder.fill",    tint: .blue,   action: .system(.downloads), image: "folder"),
+            Tile(title: "Force Quit", symbol: "xmark.octagon.fill", tint: .red, action: .system(.forceQuit), image: "force_quit"),
             Tile(title: "Sleep",      symbol: "moon.fill",      tint: .gray,   action: .shell("pmset displaysleepnow"), image: "lock_screen"),
             Tile(title: "Vol +",      symbol: "speaker.wave.3.fill", tint: .indigo, action: .system(.volumeUp)),
             Tile(title: "Vol –",      symbol: "speaker.wave.1.fill", tint: .indigo, action: .system(.volumeDown)),
             Tile(title: "Mute",       symbol: "speaker.slash.fill",  tint: .purple, action: .system(.mute), image: "buzzer_off"),
             Tile(title: "Mission",    symbol: "rectangle.3.group.fill", tint: .teal, action: .system(.missionControl)),
             Tile(title: "Buzzer",     symbol: "bell.fill",      tint: .yellow, action: .none, image: "buzzer"),
-            Tile(title: "Mic",        symbol: "mic.fill",       tint: .purple, action: .appleScript(micToggle), image: "device_mic"),
+            Tile(title: "Mic",        symbol: "mic.fill",       tint: .purple, action: .system(.micToggle), image: "device_mic"),
         ])
 
         let web = PadPage(name: "Web", tiles: [
@@ -576,9 +569,14 @@ final class PadStore: ObservableObject {
             switch tile.title {
             case "Activity": action = .system(.activityMonitor)
             case "Mission":  action = .system(.missionControl)
+            case "Spotlight": action = .system(.spotlight)
+            case "Screenshot": action = .system(.screenshot)
+            case "Downloads": action = .system(.downloads)
+            case "Force Quit": action = .system(.forceQuit)
             case "Vol +":    action = .system(.volumeUp)
             case "Vol –":    action = .system(.volumeDown)
             case "Mute":     action = .system(.mute)
+            case "Mic":      action = .system(.micToggle)
             default:         return tile
             }
             return Tile(title: tile.title, symbol: tile.symbol, tint: tile.tint,

@@ -95,6 +95,21 @@ enum MacroActionExecutor {
                     fallbackPath: "/System/Applications/Mission Control.app",
                     label: "Mission Control",
                     log: log)
+        case .spotlight:
+            runFixedAppleScript("tell application \"System Events\" to keystroke space using command down",
+                                label: "Spotlight",
+                                log: log)
+        case .screenshot:
+            openApp(bundleID: "com.apple.screenshot.launcher",
+                    fallbackPath: "/System/Applications/Utilities/Screenshot.app",
+                    label: "Screenshot",
+                    log: log)
+        case .downloads:
+            openDownloads(log: log)
+        case .forceQuit:
+            runFixedAppleScript("tell application \"System Events\" to key code 53 using {command down, option down}",
+                                label: "Force Quit",
+                                log: log)
         case .volumeUp:
             runFixedAppleScript("set volume output volume ((output volume of (get volume settings)) + 12)",
                                 label: "volume up",
@@ -106,6 +121,17 @@ enum MacroActionExecutor {
         case .mute:
             runFixedAppleScript("set volume output muted (not (output muted of (get volume settings)))",
                                 label: "mute",
+                                log: log)
+        case .micToggle:
+            runFixedAppleScript("""
+            set inputVol to input volume of (get volume settings)
+            if inputVol > 0 then
+                set volume input volume 0
+            else
+                set volume input volume 50
+            end if
+            """,
+                                label: "mic",
                                 log: log)
         }
     }
@@ -120,6 +146,13 @@ enum MacroActionExecutor {
         }
         log("system \(label)")
         NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+    }
+
+    private static func openDownloads(log: @escaping (String) -> Void) {
+        let url = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads", isDirectory: true)
+        log("system Downloads")
+        NSWorkspace.shared.open(url)
     }
 
     private static func runFixedAppleScript(_ source: String, label: String,
