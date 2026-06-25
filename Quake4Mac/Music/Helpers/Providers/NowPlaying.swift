@@ -28,7 +28,8 @@ final class NowPlaying: ObservableObject {
     func stop() { timer?.invalidate(); timer = nil }
 
     private static let script = """
-    set out to "none|||||"
+    set sep to (ASCII character 31)
+    set out to "none" & sep & sep & sep & sep & sep
     tell application "System Events"
         set hasSpot to (exists process "Spotify")
         set hasMusic to (exists process "Music")
@@ -40,7 +41,7 @@ final class NowPlaying: ObservableObject {
                 set a to artist of current track
                 set al to album of current track
                 set u to artwork url of current track
-                set out to "Spotify|" & (player state as text) & "|" & t & "|" & a & "|" & al & "|" & u & "|" & (player position as text)
+                set out to "Spotify" & sep & (player state as text) & sep & t & sep & a & sep & al & sep & u & sep & (player position as text)
             end if
         end tell
     end if
@@ -50,7 +51,7 @@ final class NowPlaying: ObservableObject {
                 set t to name of current track
                 set a to artist of current track
                 set al to album of current track
-                set out to "Music|" & (player state as text) & "|" & t & "|" & a & "|" & al & "|" & "|" & (player position as text)
+                set out to "Music" & sep & (player state as text) & sep & t & sep & a & sep & al & sep & sep & (player position as text)
             end if
         end tell
     end if
@@ -74,7 +75,7 @@ final class NowPlaying: ObservableObject {
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             p.waitUntilExit()
             let raw = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-            let f = raw.components(separatedBy: "|")
+            let f = raw.components(separatedBy: "\u{1F}")
             DispatchQueue.main.async {
                 self.pollBusy = false
                 guard f.count >= 6, f[0] != "none" else {

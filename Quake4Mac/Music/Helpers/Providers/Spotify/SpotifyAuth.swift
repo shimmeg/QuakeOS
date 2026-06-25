@@ -20,6 +20,9 @@ final class SpotifyAuth: NSObject, ObservableObject {
     private static let defaultClientID = "6a6e71c369494e2fa70dd5c1608dd435"
     private static let clientIDKey = "spotify.clientID"
     private static let refreshTokenKey = "spotify.refreshToken"
+    // Keys used to persist the in-flight PKCE round-trip so it survives an app relaunch.
+    private static let pendingVerifierKey = "spotify.pendingVerifier"
+    private static let pendingStateKey = "spotify.pendingState"
 
     // Pre-filled with our Spotify app Client ID (public, not a secret). A value saved in
     // Settings overrides it.
@@ -32,7 +35,14 @@ final class SpotifyAuth: NSObject, ObservableObject {
     private var accessToken: String?
     private var expiry: Date = .distantPast
     private var verifier: String = ""
+    private var state: String = ""                       // CSRF nonce binding the callback to this attempt
     private var listener: NWListener?
+
+    // Coalesce overlapping token refreshes: while a refresh POST is in flight, queue
+    // additional callers here and fan the single result out to all of them. Touched only
+    // on the main thread (validToken/post completions are main-dispatched).
+    private var isRefreshing = false
+    private var refreshWaiters: [(String?) -> Void] = []
 
     init(defaults: UserDefaults = .standard, secretStore: SecretStore = KeychainStore.shared) {
         self.defaults = defaults
@@ -68,6 +78,11 @@ final class SpotifyAuth: NSObject, ObservableObject {
 
     func disconnect() {
         refreshToken = nil; accessToken = nil; expiry = .distantPast
+        // Tear down any in-flight refresh: tell pending waiters there's no token now.
+        let waiters = refreshWaiters
+        refreshWaiters.removeAll()
+        isRefreshing = false
+        waiters.forEach { $0(nil) }
     }
 
     private func migrateLegacyRefreshToken() {
@@ -91,7 +106,12 @@ final class SpotifyAuth: NSObject, ObservableObject {
         guard !clientID.isEmpty else { lastError = "Enter your Spotify Client ID first."; return }
         lastError = ""
         verifier = Self.randomVerifier()
+        state = Self.randomVerifier()                    // same RNG/charset as the PKCE verifier
         let challenge = Self.challenge(for: verifier)
+
+        // Persist the in-flight verifier+state so an OAuth round-trip survives a relaunch.
+        defaults.set(verifier, forKey: Self.pendingVerifierKey)
+        defaults.set(state, forKey: Self.pendingStateKey)
 
         startListener()
 
@@ -102,6 +122,7 @@ final class SpotifyAuth: NSObject, ObservableObject {
             .init(name: "redirect_uri", value: Self.redirectURI),
             .init(name: "code_challenge_method", value: "S256"),
             .init(name: "code_challenge", value: challenge),
+            .init(name: "state", value: state),
             .init(name: "scope", value: Self.scopes),
             .init(name: "show_dialog", value: "true")   // force fresh consent so playlist access is actually granted
         ]
@@ -123,13 +144,28 @@ final class SpotifyAuth: NSObject, ObservableObject {
                 let req = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
                 let code = Self.queryValue(in: req, key: "code")
                 let denied = Self.queryValue(in: req, key: "error")
+                let returnedState = Self.queryValue(in: req, key: "state")
+                // CSRF: the callback must carry the exact state nonce we sent. A relaunch may have
+                // dropped the in-memory copy, so fall back to the persisted value before validating.
+                let expectedState = self.state.isEmpty ? (self.defaults.string(forKey: Self.pendingStateKey) ?? "") : self.state
+                let stateOK = !expectedState.isEmpty && returnedState == expectedState
+                // Only treat a callback as accepted once both the code and the state check out.
+                let accepted = code != nil && stateOK
                 let body = """
                 <html><body style="font-family:-apple-system,sans-serif;background:#0b0b0f;color:#e8eef6;text-align:center;padding-top:90px">
-                <h2>\(code != nil ? "Quake4Mac connected ✓" : "Login cancelled")</h2><p>You can close this tab and return to Quake4Mac.</p></body></html>
+                <h2>\(accepted ? "Quake4Mac connected ✓" : "Login cancelled")</h2><p>You can close this tab and return to Quake4Mac.</p></body></html>
                 """
                 let resp = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n\(body)"
                 conn.send(content: resp.data(using: .utf8), completion: .contentProcessed { _ in conn.cancel() })
-                if let code = code { self.exchange(code: code) }
+                if let code = code {
+                    if stateOK {
+                        self.state = ""                              // clear after a successful match
+                        self.defaults.removeObject(forKey: Self.pendingStateKey)
+                        self.exchange(code: code)
+                    } else {
+                        DispatchQueue.main.async { self.lastError = "Spotify: state mismatch (ignored callback)" }
+                    }
+                }
                 else if let denied = denied { DispatchQueue.main.async { self.lastError = "Spotify: \(denied)" } }
                 self.listener?.cancel(); self.listener = nil
             }
@@ -139,16 +175,21 @@ final class SpotifyAuth: NSObject, ObservableObject {
     }
 
     private func exchange(code: String) {
+        // Prefer the in-memory verifier; fall back to the persisted one if we were relaunched.
+        let usedVerifier = verifier.isEmpty ? (defaults.string(forKey: Self.pendingVerifierKey) ?? "") : verifier
         var body = URLComponents()
         body.queryItems = [
             .init(name: "grant_type", value: "authorization_code"),
             .init(name: "code", value: code),
             .init(name: "redirect_uri", value: Self.redirectURI),
             .init(name: "client_id", value: clientID),
-            .init(name: "code_verifier", value: verifier)
+            .init(name: "code_verifier", value: usedVerifier)
         ]
         post(body: body.percentEncodedQuery ?? "") { [weak self] json in
             guard let self else { return }
+            // The round-trip is done either way — drop the persisted PKCE material.
+            self.defaults.removeObject(forKey: Self.pendingVerifierKey)
+            self.defaults.removeObject(forKey: Self.pendingStateKey)
             if let rt = json?["refresh_token"] as? String { self.refreshToken = rt }
             else if json?["error"] != nil { self.lastError = "Token exchange failed: \(json?["error_description"] ?? json?["error"] ?? "")" }
             self.store(json)
@@ -158,8 +199,19 @@ final class SpotifyAuth: NSObject, ObservableObject {
     // MARK: Token access
 
     func validToken(_ completion: @escaping (String?) -> Void) {
+        // Fast path: a still-valid cached token, no network needed.
         if let t = accessToken, expiry > Date().addingTimeInterval(30) { completion(t); return }
         guard let rt = refreshToken, !clientID.isEmpty else { completion(nil); return }
+
+        // Coalesce concurrent refreshes. Spotify can rotate the refresh token, so two
+        // overlapping POSTs could invalidate each other and log the user out. Queue this
+        // caller and let the single in-flight refresh fan its result out to everyone.
+        // All access to isRefreshing/refreshWaiters happens on the main thread (post()'s
+        // completion is main-dispatched and the poll/commands call in on main too).
+        refreshWaiters.append(completion)
+        if isRefreshing { return }
+        isRefreshing = true
+
         var body = URLComponents()
         body.queryItems = [
             .init(name: "grant_type", value: "refresh_token"),
@@ -167,10 +219,15 @@ final class SpotifyAuth: NSObject, ObservableObject {
             .init(name: "client_id", value: clientID)
         ]
         post(body: body.percentEncodedQuery ?? "") { [weak self] json in
-            guard let self else { completion(nil); return }
+            guard let self else { return }
             if let rt = json?["refresh_token"] as? String { self.refreshToken = rt }
             self.store(json)
-            completion(self.accessToken)
+            // Hand the one result to every waiter, then reset for the next refresh.
+            let result = self.accessToken
+            let waiters = self.refreshWaiters
+            self.refreshWaiters.removeAll()
+            self.isRefreshing = false
+            waiters.forEach { $0(result) }
         }
     }
 

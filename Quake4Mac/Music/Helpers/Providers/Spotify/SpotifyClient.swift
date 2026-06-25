@@ -93,8 +93,14 @@ final class SpotifyClient: ObservableObject {
         get("/me/player") { [weak self] json in
             defer { completion?() }
             guard let self else { return }
-            // 204/empty = nothing active on any device; keep last-known and bail.
-            guard let json, let item = json["item"] as? [String: Any] else { return }
+            // 204/empty = nothing active on any device; keep last-known title/artist/art to
+            // avoid flicker, but clear the "playing" state so the scrubber doesn't look like
+            // it's playing a frozen track.
+            guard let json, let item = json["item"] as? [String: Any] else {
+                self.isPlaying = false
+                self.progressMs = 0
+                return
+            }
             self.available = true
             self.title = item["name"] as? String ?? ""
             self.artist = (item["artists"] as? [[String: Any]])?.compactMap { $0["name"] as? String }.joined(separator: ", ") ?? ""
@@ -144,6 +150,7 @@ final class SpotifyClient: ObservableObject {
 
     /// Fetch tracks for a playlist OR album context URI. Reports the actual outcome to tracksDebug.
     private func fetchTracks(forContextURI uri: String, _ completion: @escaping ([[String: Any]]) -> Void) {
+        if let until = rateLimitedUntil, Date() < until { completion([]); return }   // backing off after a 429
         let parts = uri.components(separatedBy: ":")   // spotify:playlist:ID  /  spotify:album:ID
         guard parts.count >= 3 else { setDebug("bad uri: \(uri)"); completion([]); return }
         let type = parts[1], id = parts[2]
@@ -162,6 +169,7 @@ final class SpotifyClient: ObservableObject {
                 self.setDebug("no token"); DispatchQueue.main.async { completion([]) }; return
             }
             var req = URLRequest(url: url)
+            req.timeoutInterval = 10
             req.setValue("Bearer \(tok)", forHTTPHeaderField: "Authorization")
             URLSession.shared.dataTask(with: req) { data, resp, err in
                 let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
@@ -241,9 +249,11 @@ final class SpotifyClient: ObservableObject {
     }
 
     private func get(_ path: String, _ completion: @escaping ([String: Any]?) -> Void) {
+        if let until = rateLimitedUntil, Date() < until { DispatchQueue.main.async { completion(nil) }; return }   // backing off after a 429
         auth.validToken { tok in
             guard let tok else { DispatchQueue.main.async { completion(nil) }; return }
             var req = URLRequest(url: URL(string: "https://api.spotify.com/v1" + path)!)
+            req.timeoutInterval = 10
             req.setValue("Bearer \(tok)", forHTTPHeaderField: "Authorization")
             URLSession.shared.dataTask(with: req) { data, resp, _ in
                 let http = resp as? HTTPURLResponse
@@ -256,9 +266,11 @@ final class SpotifyClient: ObservableObject {
     }
 
     private func command(_ method: String, _ path: String, body: [String: Any]? = nil, then: (() -> Void)? = nil) {
+        if let until = rateLimitedUntil, Date() < until { return }   // backing off after a 429
         auth.validToken { tok in
             guard let tok else { return }
             var req = URLRequest(url: URL(string: "https://api.spotify.com/v1" + path)!)
+            req.timeoutInterval = 10
             req.httpMethod = method
             req.setValue("Bearer \(tok)", forHTTPHeaderField: "Authorization")
             if let body = body {

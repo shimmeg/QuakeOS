@@ -48,7 +48,11 @@ final class Lyrics: ObservableObject {
                     return Self.nonLatin(p) * 1000 + (hasSync ? 1 : 0)
                 }
                 let usable = arr.filter { !(($0["plainLyrics"] as? String ?? "").isEmpty) || !(($0["syncedLyrics"] as? String ?? "").isEmpty) }
-                if let best = usable.max(by: { score($0) < score($1) }) {
+                // Deterministic pick: highest score, ties broken by earliest original order (so equal-scored candidates don't shuffle).
+                if let best = usable.enumerated().max(by: { a, b in
+                    let sa = score(a.element), sb = score(b.element)
+                    return sa != sb ? sa < sb : a.offset > b.offset
+                })?.element {
                     plain = (best["plainLyrics"] as? String ?? "").components(separatedBy: "\n")
                     sync = Self.parseLRC(best["syncedLyrics"] as? String ?? "")
                 }
@@ -88,11 +92,13 @@ final class Lyrics: ObservableObject {
         return out.sorted { ($0["t"] as? Int ?? 0) < ($1["t"] as? Int ?? 0) }
     }
 
-    /// Count of non-Latin (e.g. Devanagari) letters — higher means more likely the original language.
+    /// Count of non-Latin alphabetic letters (Cyrillic, CJK, Arabic, Hebrew, Korean, Thai, Greek,
+    /// Devanagari, …) — higher means more likely the original language rather than an English
+    /// translation. Letters only (ignores digits/punctuation/spaces); a scalar counts as non-Latin
+    /// when it is alphabetic and lies beyond the Latin ranges (Basic Latin + Latin-1/Extended-A/B).
     private static func nonLatin(_ s: String) -> Int {
         s.unicodeScalars.reduce(0) { acc, u in
-            let v = u.value
-            return acc + ((v >= 0x0900 && v <= 0x097F) ? 1 : 0)   // Devanagari block
+            acc + ((u.value > 0x024F && u.properties.isAlphabetic) ? 1 : 0)
         }
     }
 }
