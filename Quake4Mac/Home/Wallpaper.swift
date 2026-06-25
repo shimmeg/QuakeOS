@@ -50,7 +50,7 @@ final class WallpaperStore: ObservableObject {
     // Decoded-image cache: StaticImageWallpaperView is a struct re-created on every ContentView.body
     // re-eval (page change, app open/close), and its init used to NSImage(contentsOf:) — re-reading +
     // re-decoding the PNG from the bundle each time. NSCache is thread-safe and self-evicts under
-    // memory pressure; there are only a handful of wallpapers, so it stays tiny.
+    // memory pressure; there are only a few wallpapers, so it stays tiny.
     private static let imageCache = NSCache<NSString, NSImage>()
     static func image(at url: URL) -> NSImage? {
         let key = url.path as NSString
