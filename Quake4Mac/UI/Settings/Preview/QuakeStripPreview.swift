@@ -394,8 +394,10 @@ struct QuakePreviewWeb: NSViewRepresentable {
                     guard let self, let data, let img = NSImage(data: data),
                           let r = ScreenModel.rasterize(img) else { return }
                     let glow = r.glow ?? "#ffffff"
-                    Coord.favCache[host] = (r.b64, glow)
-                    DispatchQueue.main.async { self.setKeyIcon(self.lastPage, i, r.b64, glow) }
+                    DispatchQueue.main.async {
+                        Coord.favCache[host] = (r.b64, glow)   // write on main — favCache isn't thread-safe
+                        self.setKeyIcon(self.lastPage, i, r.b64, glow)
+                    }
                 }.resume()
             }
         }
