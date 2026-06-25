@@ -49,6 +49,12 @@ final class SystemStats: ObservableObject {
     private var procBusy = false
     private var storageBusy = false
     private var bluetoothBusy = false
+    // Variable-latency readers (Wi-Fi/SSID, network, battery, volumes) run here so they never
+    // hitch the 1s main-thread tick. Serial → prevNet/lastNetRate stay single-owner; metricsBusy
+    // (main-only) prevents pile-up if one sample runs long.
+    private let metricsQueue = DispatchQueue(label: "com.quake4mac.sysmetrics", qos: .utility)
+    private var metricsBusy = false
+    private var lastNetRate: (up: Double, down: Double) = (0, 0)   // bg-owned fallback for readNetwork hiccups
 
     private var prev: (user: UInt32, sys: UInt32, idle: UInt32, nice: UInt32)?
     private var prevNet: (rx: UInt64, tx: UInt64, t: Date)?
@@ -77,14 +83,32 @@ final class SystemStats: ObservableObject {
             gpuTemp = Thermals.shared.gpuTemp()
             if let gl = Thermals.shared.gpuUtilization() { gpuLoad = gl }
         }
-        let n = readNetwork(); netUp = n.up; netDown = n.down
-        if let w = CWWiFiClient.shared().interface() {
-            wifiLinkMbps = w.transmitRate()        // negotiated PHY rate (e.g. 1200 for Wi-Fi 6)
-            wifiSSID = w.ssid() ?? ""
-        } else { wifiLinkMbps = 0; wifiSSID = "" }
-        if let b = readBattery() { hasBattery = true; battLevel = b.level; battCharging = b.charging }
-        else { hasBattery = false }
-        disks = readDisks()
+        // Wi-Fi (SSID lookup can stall on Location/entitlement checks), network counters, battery,
+        // and mounted-volume enumeration are the variable-latency readers — gather them on a serial
+        // background queue and publish on main, so they never hitch the 1s UI tick. (Thermals stay
+        // on main above: IOHIDEventSystem needs a run-loop thread.)
+        if !metricsBusy {
+            metricsBusy = true
+            metricsQueue.async { [weak self] in
+                guard let self else { return }
+                let net = self.readNetwork()
+                var link = 0.0, ssid = ""
+                if let w = CWWiFiClient.shared().interface() {
+                    link = w.transmitRate()        // negotiated PHY rate (e.g. 1200 for Wi-Fi 6)
+                    ssid = w.ssid() ?? ""
+                }
+                let batt = self.readBattery()
+                let dks = self.readDisks()
+                DispatchQueue.main.async {
+                    self.netUp = net.up; self.netDown = net.down
+                    self.wifiLinkMbps = link; self.wifiSSID = ssid
+                    if let b = batt { self.hasBattery = true; self.battLevel = b.level; self.battCharging = b.charging }
+                    else { self.hasBattery = false }
+                    self.disks = dks
+                    self.metricsBusy = false
+                }
+            }
+        }
         if tick % 60 == 0, !storageBusy {
             storageBusy = true
             DispatchQueue.global(qos: .utility).async { [weak self] in self?.computeStorage() }
@@ -255,7 +279,7 @@ final class SystemStats: ObservableObject {
     private func readNetwork() -> (up: Double, down: Double) {
         var rx: UInt64 = 0, tx: UInt64 = 0
         var ifap: UnsafeMutablePointer<ifaddrs>?
-        guard getifaddrs(&ifap) == 0 else { return (netUp, netDown) }
+        guard getifaddrs(&ifap) == 0 else { return lastNetRate }
         defer { freeifaddrs(ifap) }
         var p = ifap
         while let cur = p {
@@ -273,8 +297,10 @@ final class SystemStats: ObservableObject {
         defer { prevNet = (rx, tx, now) }
         guard let pr = prevNet else { return (0, 0) }
         let dt = now.timeIntervalSince(pr.t)
-        guard dt > 0 else { return (netUp, netDown) }
-        return (max(0, Double(tx &- pr.tx) / dt), max(0, Double(rx &- pr.rx) / dt))
+        guard dt > 0 else { return lastNetRate }
+        let rate = (up: max(0, Double(tx &- pr.tx) / dt), down: max(0, Double(rx &- pr.rx) / dt))
+        lastNetRate = rate
+        return rate
     }
 
     // MARK: battery (nil on desktops without one)

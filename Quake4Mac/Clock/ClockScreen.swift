@@ -224,6 +224,17 @@ struct WebDashboardWeb: NSViewRepresentable {
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
             load()
         }
+
+        // Dashboard URL, not a general browser: allow only http/https. Cancel file:// and all other
+        // schemes so a stored dashboard URL can't load local files or custom schemes.
+        func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            let scheme = action.request.url?.scheme?.lowercased() ?? ""
+            if scheme == "http" || scheme == "https" {
+                decisionHandler(.allow)
+            } else {
+                decisionHandler(.cancel)
+            }
+        }
     }
 }
 

@@ -154,6 +154,32 @@ final class BrowserSession: NSObject, ObservableObject, WKNavigationDelegate, WK
     }
 
     // MARK: delegates
+
+    /// Schemes allowed for a real user-driven browser. `file` is gated separately (bundle only).
+    private static let allowedSchemes: Set<String> = ["http", "https", "about"]
+
+    /// True only for file:// requests that point at the app's own bundled resources (e.g. browser-home.html).
+    private func isBundleFileURL(_ url: URL) -> Bool {
+        guard url.isFileURL, let resDir = Bundle.main.resourceURL else { return false }
+        return url.standardizedFileURL.path.hasPrefix(resDir.standardizedFileURL.path)
+    }
+
+    /// Gate navigation by scheme. Allow http/https/about (arbitrary hosts) plus the bundled home page;
+    /// hand mailto/tel off to the system; cancel everything else (javascript:, data:, custom schemes…).
+    func webView(_ w: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        guard let url = action.request.url else { decisionHandler(.cancel); return }
+        let scheme = url.scheme?.lowercased() ?? ""
+        if BrowserSession.allowedSchemes.contains(scheme) || isBundleFileURL(url) {
+            decisionHandler(.allow); return
+        }
+        if scheme == "mailto" || scheme == "tel" {
+            NSWorkspace.shared.open(url)
+            decisionHandler(.cancel); return
+        }
+        NSLog("[Browser] cancelled navigation to disallowed scheme: %@", url.absoluteString)
+        decisionHandler(.cancel)
+    }
+
     private func tab(for web: WKWebView) -> BrowserTab? { tabs.first { $0.web === web } }
     private func refresh(_ web: WKWebView) {
         guard let t = tab(for: web) else { return }
@@ -169,8 +195,15 @@ final class BrowserSession: NSObject, ObservableObject, WKNavigationDelegate, WK
             w.evaluateJavaScript("window.__setBookmarks && window.__setBookmarks(\(BrowserBookmarks.shared.json));", completionHandler: nil)
         }
     }
-    // Popups / target=_blank → open as a new tab.
+    // Popups / target=_blank → open as a new tab (web schemes only; non-web popups are cancelled).
     func webView(_ w: WKWebView, createWebViewWith cfg: WKWebViewConfiguration, for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+        if let url = action.request.url {
+            let scheme = url.scheme?.lowercased() ?? ""
+            guard BrowserSession.allowedSchemes.contains(scheme) || isBundleFileURL(url) else {
+                NSLog("[Browser] cancelled popup to disallowed scheme: %@", url.absoluteString)
+                return nil
+            }
+        }
         let web = WKWebView(frame: .zero, configuration: cfg)
         attach(web)
         let tab = BrowserTab(web: web); tabs.append(tab); activeID = tab.id; persist()
