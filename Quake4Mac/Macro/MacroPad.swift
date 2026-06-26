@@ -120,8 +120,8 @@ final class PadModel: ObservableObject {
     }
 
     // Screens = the tile pages, then trailing "extra" widget screens (built-in panels).
-    enum Extra: Equatable { case monitor, music, clock, weather }
-    let extras: [Extra] = [.monitor, .music, .clock, .weather]
+    enum Extra: Equatable { case monitor, music, clock, weather, calendar }
+    let extras: [Extra] = [.monitor, .music, .clock, .weather, .calendar]
 
     var screenCount: Int { pages.count + extras.count }
     var isTilePage: Bool { safePageIndex < pages.count }
@@ -169,7 +169,14 @@ final class PadModel: ObservableObject {
         switch dest {
         case .macroPage(let name): if let i = pages.firstIndex(where: { $0.name == name }) { pageIndex = i }
         case .panel(let id):
-            let ex: Extra = id == "monitor" ? .monitor : id == "music" ? .music : id == "weather" ? .weather : .clock
+            let ex: Extra
+            switch id {
+            case "monitor":  ex = .monitor
+            case "music":    ex = .music
+            case "weather":  ex = .weather
+            case "calendar": ex = .calendar
+            default:         ex = .clock
+            }
             if let k = extras.firstIndex(of: ex) { pageIndex = pages.count + k }
         case .builtin: break
         }
@@ -327,7 +334,7 @@ final class PadModel: ObservableObject {
 
     /// Names of every screen, in order, for the radial switcher.
     /// (Monitor screen is "Stats" so it doesn't collide with the "System" macro page.)
-    var screenTitles: [String] { pages.map { $0.name } + ["Stats", "Music", "Clock", "Weather"] }
+    var screenTitles: [String] { pages.map { $0.name } + ["Stats", "Music", "Clock", "Weather", CalendarAppLabels.switcherTitle] }
 
     /// Title of the current screen (matches `screenTitles`) — the key the reactive RGB "page theme"
     /// source uses to look up the colour the user picked for this page.

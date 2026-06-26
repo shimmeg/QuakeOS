@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calendar</title>
+<style>
+  :root {
+    --bg: #07080b;
+    --panel: #11141a;
+    --panel-2: #171b23;
+    --line: rgba(255,255,255,.12);
+    --text: #f7f8fb;
+    --muted: rgba(247,248,251,.62);
+    --dim: rgba(247,248,251,.36);
+    --red: #ff3b30;
+    --cyan: #28d7ff;
+  }
+  * { box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: var(--bg); color: var(--text); }
+  body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif; letter-spacing: 0; }
+  #app {
+    width: 1920px;
+    height: 480px;
+    display: grid;
+    grid-template-columns: 390px 1fr;
+    background:
+      linear-gradient(90deg, rgba(255,59,48,.12), rgba(40,215,255,.04) 46%, transparent 74%),
+      var(--bg);
+  }
+  .rail {
+    padding: 18px 34px;
+    border-right: 1px solid var(--line);
+    background: rgba(9,10,14,.74);
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-width: 0;
+  }
+  .icon {
+    width: 72px;
+    height: 72px;
+    border-radius: 18px;
+    background: var(--red);
+    display: grid;
+    place-items: center;
+    box-shadow: 0 0 28px rgba(255,59,48,.38);
+    flex: 0 0 auto;
+  }
+  .icon::before {
+    content: "25";
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    background: #fff;
+    color: var(--red);
+    font-size: 25px;
+    font-weight: 800;
+    line-height: 1;
+  }
+  h1 { margin: 0; font-size: 38px; line-height: 1; font-weight: 760; }
+  .subhead { margin-top: 8px; color: var(--muted); font-size: 18px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .status {
+    margin-top: 18px;
+    padding: 18px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(255,255,255,.045);
+  }
+  .status .label { color: var(--dim); font-size: 16px; font-weight: 700; text-transform: uppercase; }
+  .status .message { margin-top: 8px; font-size: 22px; font-weight: 650; line-height: 1.15; }
+  .date-card { width: 300px; height: 300px; padding: 30px 28px 26px; display: flex; flex-direction: column; justify-content: center; flex: 0 0 auto; }
+  .date-card.launchable { border-color: rgba(255,59,48,.34); background: rgba(255,255,255,.055); }
+  .date-card.launchable:active { transform: scale(.99); }
+  .date-large { margin-top: 12px; font-size: 76px; line-height: .9; font-weight: 820; color: var(--text); }
+  .date-weekday { margin-top: 18px; color: var(--muted); font-size: 32px; line-height: 1.05; font-weight: 680; }
+  .actions { margin-top: auto; display: flex; gap: 12px; }
+  button {
+    height: 48px;
+    border: 1px solid rgba(255,255,255,.18);
+    border-radius: 8px;
+    background: rgba(255,255,255,.08);
+    color: var(--text);
+    padding: 0 18px;
+    font-size: 16px;
+    font-weight: 650;
+    font-family: inherit;
+  }
+  button.primary { background: rgba(255,59,48,.18); border-color: rgba(255,59,48,.5); color: #fff; }
+  button.hidden { display: none; }
+  main { padding: 28px 34px 24px; min-width: 0; display: grid; grid-template-rows: 128px 1fr; gap: 18px; }
+  #app.compact main { padding: 18px 34px; grid-template-rows: 108px minmax(0, 1fr); gap: 12px; }
+  .hero {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 18px;
+    min-width: 0;
+  }
+  .focus {
+    border: 1px solid rgba(40,215,255,.24);
+    border-radius: 8px;
+    background: rgba(40,215,255,.08);
+    padding: 20px 24px;
+    min-width: 0;
+  }
+  .focus .kicker { color: var(--cyan); font-size: 13px; font-weight: 800; text-transform: uppercase; }
+  .focus .title { margin-top: 8px; font-size: 34px; line-height: 1.05; font-weight: 760; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .focus-row { margin-top: 8px; display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 18px; align-items: start; min-width: 0; }
+  .focus-time { padding-top: 4px; color: var(--text); font-size: 26px; line-height: 1.05; font-weight: 780; font-variant-numeric: tabular-nums; }
+  .focus-copy { min-width: 0; }
+  .focus-copy .title { margin-top: 0; }
+  .focus .meta { margin-top: 8px; color: var(--muted); font-size: 19px; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #app.compact .focus { padding: 16px 24px; }
+  #app.compact .focus .title { font-size: 30px; }
+  #app.compact .focus-row { margin-top: 6px; grid-template-columns: 142px minmax(0, 1fr); }
+  #app.compact .focus-time { font-size: 24px; }
+  #app.compact .focus .meta { font-size: 18px; }
+  .count {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(255,255,255,.045);
+    padding: 20px 22px;
+  }
+  #app.compact .count { padding: 16px 22px; }
+  .count .num { font-size: 48px; line-height: .9; font-weight: 800; }
+  .count .caption { margin-top: 12px; color: var(--muted); font-size: 17px; }
+  .events {
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 8px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(82px, auto);
+    gap: 12px;
+    scrollbar-width: none;
+  }
+  .events.compact {
+    padding-right: 0;
+    grid-template-rows: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: minmax(0, 1fr);
+    gap: 10px;
+  }
+  .events::-webkit-scrollbar { width: 0; height: 0; }
+  .event {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    display: grid;
+    grid-template-columns: 7px 150px minmax(0, 1fr);
+    min-width: 0;
+    overflow: hidden;
+  }
+  .event.now { border-color: rgba(40,215,255,.54); background: rgba(40,215,255,.08); }
+  .event.past { filter: brightness(.7); }
+  .event.past .stripe { opacity: .68; }
+  .stripe { background: var(--event-color, var(--red)); }
+  .time { padding: 18px 16px; color: var(--muted); font-size: 21px; line-height: 1.08; font-weight: 740; }
+  .body { padding: 14px 16px 12px 4px; min-width: 0; }
+  .event-title { font-size: 28px; line-height: 1.04; font-weight: 740; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .event-meta { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 5px 14px; color: var(--muted); font-size: 19px; line-height: 1.18; min-width: 0; }
+  .event-meta span { overflow-wrap: anywhere; min-width: 0; }
+  .events.compact .event { grid-template-columns: 7px 132px minmax(0, 1fr); }
+  .events.compact .time { padding: 14px 14px; font-size: 20px; line-height: 1.06; }
+  .events.compact .body { padding: 11px 14px 9px 2px; }
+  .events.compact .event-title { font-size: 26px; line-height: 1.02; }
+  .events.compact .event-meta { margin-top: 7px; font-size: 17px; line-height: 1.12; max-height: 40px; overflow: hidden; }
+  .badge { color: var(--cyan); font-weight: 760; }
+  .empty {
+    grid-column: 1 / -1;
+    height: 252px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(255,255,255,.04);
+    display: grid;
+    place-items: center;
+    text-align: center;
+  }
+  .empty-title { font-size: 34px; font-weight: 760; }
+  .empty-subtitle { margin-top: 8px; color: var(--muted); font-size: 18px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside class="rail">
+    <div class="brand">
+      <div class="icon" aria-hidden="true"></div>
+      <div>
+        <h1>Calendar</h1>
+        <div class="subhead" id="date">Today</div>
+      </div>
+    </div>
+    <div class="status date-card" id="dateCard">
+      <div class="label">Today</div>
+      <div class="date-large" id="dateLarge">Today</div>
+      <div class="date-weekday" id="dateWeekday"></div>
+    </div>
+    <div class="actions">
+      <button id="request" class="hidden">Allow Calendar</button>
+    </div>
+  </aside>
+  <main>
+    <section class="hero">
+      <div class="focus" id="focus"></div>
+      <div class="count">
+        <div class="num" id="count">0</div>
+        <div class="caption" id="caption">events today</div>
+      </div>
+    </section>
+    <section class="events" id="events"></section>
+  </main>
+</div>
+<script>
+(() => {
+  const state = {
+    status: 'notDetermined',
+    dateTitle: 'Today',
+    message: 'Grant Calendar access from Quake4Mac settings on your Mac',
+    events: [],
+    canOpenFantastical: false
+  };
+
+  const el = {
+    app: document.getElementById('app'),
+    date: document.getElementById('date'),
+    dateCard: document.getElementById('dateCard'),
+    dateLarge: document.getElementById('dateLarge'),
+    dateWeekday: document.getElementById('dateWeekday'),
+    request: document.getElementById('request'),
+    focus: document.getElementById('focus'),
+    count: document.getElementById('count'),
+    caption: document.getElementById('caption'),
+    events: document.getElementById('events')
+  };
+
+  function esc(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, ch => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+  }
+
+  function post(action) {
+    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.calendar) {
+      window.webkit.messageHandlers.calendar.postMessage(action);
+    }
+  }
+
+  function timeHTML(value) {
+    return esc(value || '').replace(/-/g, '-<br>');
+  }
+
+  function dateParts(value) {
+    const fallback = String(value || 'Today').trim() || 'Today';
+    const parts = fallback.split(',').map(part => part.trim()).filter(Boolean);
+    if (parts.length >= 2) return { weekday: parts[0], date: parts.slice(1).join(', ') };
+    return { weekday: '', date: fallback };
+  }
+
+  function timeStart(value) {
+    return String(value || '').split('-')[0].trim();
+  }
+
+  function timeEnd(value) {
+    const parts = String(value || '').split('-');
+    return (parts[1] || parts[0] || '').trim();
+  }
+
+  function navStatus(events, status) {
+    if (status !== 'authorized') {
+      if (status === 'requesting') return 'Waiting for permission';
+      if (status === 'denied' || status === 'restricted') return 'Access is off';
+      return 'Calendar access needed';
+    }
+    const now = events.find(event => event.isNow);
+    if (now) return `Now until ${timeEnd(now.timeText)}`;
+    const next = events.find(event => event.isNext);
+    if (next) return `Next at ${timeStart(next.timeText)}`;
+    return 'No events left';
+  }
+
+  function gridOrder(events, rows) {
+    const ordered = [];
+    const columns = 2;
+    const chunkSize = rows * columns;
+    for (let i = 0; i < events.length; i += chunkSize) {
+      const chunk = events.slice(i, i + chunkSize);
+      for (let row = 0; row < rows; row += 1) {
+        for (let column = 0; column < columns; column += 1) {
+          const index = column * rows + row;
+          if (chunk[index]) ordered.push(chunk[index]);
+        }
+      }
+    }
+    return ordered;
+  }
+
+  function isPastEvent(event) {
+    const end = Number(event.end);
+    return !event.isNow && Number.isFinite(end) && end > 0 && end * 1000 < Date.now();
+  }
+
+  function focusEvent(events) {
+    return events.find(e => e.isNow) || events.find(e => e.isNext) || events.find(e => !e.isAllDay) || events[0] || null;
+  }
+
+  function renderFocus(events, status) {
+    const focused = focusEvent(events);
+    if (status !== 'authorized') {
+      const blocked = status === 'denied' || status === 'restricted';
+      const waiting = status === 'requesting';
+      const title = blocked ? 'Calendar access is off' : waiting ? 'Waiting for permission' : 'Calendar access needed';
+      const meta = blocked
+        ? 'Enable Calendars for Quake4Mac in System Settings.'
+        : waiting
+          ? 'Approve the Quake4Mac Calendar prompt from your Mac.'
+          : 'Grant access from Quake4Mac settings on your Mac.';
+      el.focus.innerHTML = `<div class="kicker">Permission</div><div class="title">${title}</div><div class="meta">${meta}</div>`;
+      return;
+    }
+    if (!focused) {
+      el.focus.innerHTML = '<div class="kicker">Today</div><div class="title">No events</div><div class="meta">Your schedule is clear.</div>';
+      return;
+    }
+    const label = focused.isNow ? 'Now' : focused.isNext ? 'Next' : focused.isAllDay ? 'All day' : 'Today';
+    const location = focused.location ? ` · ${esc(focused.location)}` : '';
+    el.focus.innerHTML = `<div class="kicker">${label}</div>
+      <div class="focus-row">
+        <div class="focus-time">${timeHTML(focused.timeText)}</div>
+        <div class="focus-copy">
+          <div class="title">${esc(focused.title)}</div>
+          <div class="meta">${esc(focused.calendarName)}${location}</div>
+        </div>
+      </div>`;
+  }
+
+  function renderEvents(events, status) {
+    if (status !== 'authorized') {
+      const blocked = status === 'denied' || status === 'restricted';
+      const waiting = status === 'requesting';
+      const title = blocked ? 'Calendar access is off' : waiting ? 'Waiting for permission' : 'Calendar access needed';
+      const subtitle = blocked
+        ? 'Open Settings to re-enable Calendar access for Quake4Mac.'
+        : waiting
+          ? 'Approve the system prompt from Quake4Mac on your Mac.'
+          : 'Use Quake4Mac settings on your Mac to grant access.';
+      el.events.innerHTML = `<div class="empty"><div><div class="empty-title">${title}</div><div class="empty-subtitle">${subtitle}</div></div></div>`;
+      return;
+    }
+    if (!events.length) {
+      el.events.innerHTML = '<div class="empty"><div><div class="empty-title">No events today</div><div class="empty-subtitle">Open Fantastical for full calendar editing.</div></div></div>';
+      return;
+    }
+    const rows = events.length >= 5 ? 3 : 2;
+    el.events.innerHTML = gridOrder(events, rows).map(event => {
+      const classes = `event${event.isNow ? ' now' : ''}${isPastEvent(event) ? ' past' : ''}`;
+      const marker = event.isNow ? '<span class="badge">Now</span>' : event.isNext ? '<span class="badge">Next</span>' : '';
+      const location = event.location ? `<span>${esc(event.location)}</span>` : '';
+      return `<article class="${classes}" style="--event-color:${esc(event.calendarColorHex)}">
+        <div class="stripe"></div>
+        <div class="time">${esc(event.timeText)}</div>
+        <div class="body">
+          <div class="event-title">${esc(event.title)}</div>
+          <div class="event-meta">${marker}<span>${esc(event.calendarName)}</span>${location}</div>
+        </div>
+      </article>`;
+    }).join('');
+  }
+
+  function render() {
+    const today = dateParts(state.dateTitle);
+    el.date.textContent = navStatus(state.events, state.status);
+    el.dateLarge.textContent = today.date;
+    el.dateWeekday.textContent = today.weekday;
+    const compact = state.status === 'authorized' && state.events.length >= 5;
+    el.app.classList.toggle('compact', compact);
+    el.events.classList.toggle('compact', compact);
+    el.dateCard.classList.toggle('launchable', state.canOpenFantastical);
+    const canRequest = state.status === 'notDetermined';
+    const canOpenSettings = ['denied', 'restricted'].includes(state.status);
+    el.request.classList.toggle('hidden', !(canRequest || canOpenSettings));
+    el.request.textContent = canRequest ? 'Allow Calendar' : 'Open Settings';
+    el.count.textContent = String(state.events.length);
+    el.caption.textContent = state.events.length === 1 ? 'event today' : 'events today';
+    renderFocus(state.events, state.status);
+    renderEvents(state.events, state.status);
+  }
+
+  el.dateCard.onclick = () => {
+    if (state.canOpenFantastical) post('openFantastical');
+  };
+  el.request.onclick = () => {
+    if (state.status === 'notDetermined') post('requestAccess');
+    else post('openCalendarPrivacy');
+  };
+
+  window.CAL = {
+    set(payload) {
+      try {
+        Object.assign(state, JSON.parse(payload));
+        render();
+      } catch (error) {
+        state.status = 'error';
+        state.message = 'Calendar data failed to load';
+        state.events = [];
+        render();
+      }
+    },
+    scroll(deltaY) {
+      el.events.scrollTop += Number(deltaY || 0);
+    }
+  };
+
+  render();
+})();
+</script>
+</body>
+</html>

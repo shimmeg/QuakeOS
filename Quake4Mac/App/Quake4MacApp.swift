@@ -121,7 +121,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // and each panel keeps refreshing in the background while you're elsewhere. Deferred one run-loop
         // turn so the visible window paints before three 1920×480 WKWebViews (+ WebContent XPC) spin up.
         DispatchQueue.main.async { PanelWarmer.warmAll() }
-
         // Knob RGB ring: hand the controller + reactive engine the device, then restore the saved
         // look once the device has finished attaching (matching/open is async, ~1s after start()).
         RGBController.shared.input = state.input

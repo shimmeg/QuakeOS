@@ -349,5 +349,6 @@ enum PanelWarmer {
         // MusicWeb intentionally NOT warmed yet — its persistent path is untested on-device, so we keep
         // the proven MusicScreenView active. Re-add `_ = MusicWeb.shared` once it's verified.
         WeatherWeb.shared.warm()
+        CalendarWeb.shared.warm()
     }
 }

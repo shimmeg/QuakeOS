@@ -26,6 +26,8 @@ There is no test target in the project at the time this file was created. For so
 
 The CLI verification build disables code signing so agents do not depend on a local Mac Development certificate. If `xcodebuild` prints CoreSimulator or Xcode log-store warnings while building the macOS target, treat them as environment noise unless the command exits nonzero or the build fails. The success signal is `** BUILD SUCCEEDED **`.
 
+For Calendar, Input Monitoring, LaunchServices, `NSWorkspace`, EventKit, privacy prompts, and other system-integrated macOS behavior, treat a normal `.app` launch path as the source of truth for QA. Use `Xcode Run`, `open -n <Quake4Mac.app>`, or another LaunchServices-backed app launch for real integration verification. Direct execution of `Quake4Mac.app/Contents/MacOS/Quake4Mac` is allowed only for low-level debugging and must not be treated as authoritative for TCC identity, prompt routing, or system-integration behavior.
+
 ## Directory Map
 
 - `Quake4Mac/App`: app lifecycle, display selection, settings windows, menu bar, panel sleep prevention, and persistent `WKWebView` infrastructure.

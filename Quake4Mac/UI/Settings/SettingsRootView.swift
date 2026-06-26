@@ -192,6 +192,7 @@ struct SettingsRootView: View {
         case .prebuilt(.clock):     ClockPageView(pageName: "Clock")
         case .prebuilt(.browser):   BrowserPanelView(pageName: "Browser")
         case .prebuilt(.weather):   WeatherPanelView(pageName: "Weather")
+        case .prebuilt(.calendar):  CalendarPanelView()
         case .section(let s):
             switch s {
             case .general:  GeneralSettingsView()

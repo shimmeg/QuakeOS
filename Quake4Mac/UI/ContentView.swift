@@ -88,6 +88,8 @@ struct ContentView: View {
                 ClockDeviceView().ignoresSafeArea()
             case .weather:
                 WeatherScreenView().ignoresSafeArea()
+            case .calendar:
+                CalendarDeviceView().ignoresSafeArea()
             case .none:
                 switch pad.currentKind {
                 case .grid:                            ScreenWebView(pad: pad).ignoresSafeArea()

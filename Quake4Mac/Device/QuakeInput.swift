@@ -136,6 +136,8 @@ final class QuakeInputReader: ObservableObject {
     }
 
     func start() {
+        guard ensureInputMonitoringAccess() else { return }
+
         let mgr = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
         manager = mgr
 
@@ -160,6 +162,27 @@ final class QuakeInputReader: ObservableObject {
             log(msg)
         } else {
             log("HID manager open OK. Watching for knob 4158:514B + touch 0712:0010.")
+        }
+    }
+
+    private func ensureInputMonitoringAccess() -> Bool {
+        switch IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) {
+        case kIOHIDAccessTypeGranted:
+            return true
+        case kIOHIDAccessTypeDenied:
+            let msg = "Input Monitoring is off — enable it for Quake4Mac in System Settings, then relaunch"
+            lastEvent = msg
+            log(msg)
+            _ = IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
+            return false
+        default:
+            let granted = IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
+            if !granted {
+                let msg = "Input Monitoring permission is needed for the DK-QUAKE touchscreen and knob"
+                lastEvent = msg
+                log(msg)
+            }
+            return granted
         }
     }
 

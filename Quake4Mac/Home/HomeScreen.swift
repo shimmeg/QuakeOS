@@ -30,7 +30,12 @@ extension AppDest {
     var displayName: String {
         switch self {
         case .macroPage(let n): return n
-        case .panel(let p):     return p == "monitor" ? "System Monitor" : p.capitalized
+        case .panel(let p):
+            switch p {
+            case "monitor":  return "System Monitor"
+            case "calendar": return CalendarAppLabels.appTitle
+            default:         return p.capitalized
+            }
         case .builtin(let b):   return b.capitalized
         }
     }
@@ -57,11 +62,28 @@ final class HomeStore: ObservableObject {
     private static let key = "home.layout"
 
     private init() {
+        let defaults = UserDefaults.standard
         if let d = UserDefaults.standard.data(forKey: HomeStore.key),
            let dto = try? JSONDecoder().decode([[HomeAppDTO]].self, from: d), !dto.isEmpty {
-            pages = dto.map { $0.map { $0.toApp() } }
+            var loaded = dto.map { $0.map { $0.toApp() } }
+            let destKeys = loaded.map { $0.map { $0.dest.storageKey } }
+            if HomeLayoutMigration.shouldAddFantastical(
+                hasMigrationRun: defaults.bool(forKey: HomeLayoutMigration.fantasticalMigrationKey),
+                destKeys: destKeys
+            ) {
+                loaded = HomeStore.ensureFantasticalApp(loaded)
+                pages = loaded
+                defaults.set(true, forKey: HomeLayoutMigration.fantasticalMigrationKey)
+                save()
+            } else {
+                pages = loaded
+                if HomeLayoutMigration.containsFantastical(destKeys: destKeys) {
+                    defaults.set(true, forKey: HomeLayoutMigration.fantasticalMigrationKey)
+                }
+            }
         } else {
             pages = HomeStore.defaultPages()
+            defaults.set(true, forKey: HomeLayoutMigration.fantasticalMigrationKey)
         }
     }
     private func save() {
@@ -107,6 +129,7 @@ final class HomeStore: ObservableObject {
             HomeApp(title: "Clock",     symbol: "clock.fill",     tint: .orange, dest: .panel("clock")),
             HomeApp(title: "Music",     symbol: "music.note",     tint: .pink,   dest: .panel("music")),
             HomeApp(title: "Monitor",   symbol: "cpu",            tint: .green,  dest: .panel("monitor")),
+            fantasticalApp(),
             HomeApp(title: "Settings",  symbol: "gearshape.fill", tint: .gray,   dest: .builtin("settings")),
             HomeApp(title: "Wallpaper", symbol: "photo.fill",     tint: .blue,   dest: .builtin("wallpaper")),
             HomeApp(title: "Browser",   symbol: "globe",          tint: .purple, dest: .builtin("browser")),
@@ -123,6 +146,7 @@ final class HomeStore: ObservableObject {
             HomeApp(title: "Monitor",  symbol: "cpu",              tint: .green,  dest: .panel("monitor")),
             HomeApp(title: "Music",    symbol: "music.note",       tint: .pink,   dest: .panel("music")),
             HomeApp(title: "Weather",  symbol: "cloud.sun.fill",   tint: .cyan,   dest: .panel("weather")),
+            fantasticalApp(),
             HomeApp(title: "Wallpaper",symbol: "photo.fill",       tint: .blue,   dest: .builtin("wallpaper")),
             HomeApp(title: "Browser",  symbol: "globe",            tint: .purple, dest: .builtin("browser")),
         ]
@@ -132,6 +156,21 @@ final class HomeStore: ObservableObject {
             HomeApp(title: "Web",    symbol: "network",              tint: .teal,  dest: .macroPage("Web")),
         ]
         return [osBasics, yourPages]
+    }
+
+    private static func fantasticalApp() -> HomeApp {
+        HomeApp(title: CalendarAppLabels.appTitle, symbol: "calendar", tint: .red, dest: .panel("calendar"))
+    }
+
+    private static func ensureFantasticalApp(_ input: [[HomeApp]]) -> [[HomeApp]] {
+        guard !input.flatMap({ $0 }).contains(where: { $0.dest == .panel("calendar") }) else { return input }
+        var pages = input.isEmpty ? defaultPages() : input
+        if pages[0].count < HomeLayoutMetrics.cols * HomeLayoutMetrics.rows {
+            pages[0].append(fantasticalApp())
+        } else {
+            pages.append([fantasticalApp()])
+        }
+        return pages
     }
 }
 

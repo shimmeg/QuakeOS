@@ -41,6 +41,12 @@
 		AA0000000000000000000071 /* BrowserApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000070 /* BrowserApp.swift */; };
 		AA0000000000000000000073 /* SettingsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000072 /* SettingsApp.swift */; };
 		AA0000000000000000000075 /* WeatherScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000074 /* WeatherScreen.swift */; };
+		AA00000000000000000000B2 /* CalendarPanelModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000000000000000000B0 /* CalendarPanelModels.swift */; };
+		AA00000000000000000000B3 /* CalendarScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000000000000000000B1 /* CalendarScreen.swift */; };
+		AA00000000000000000000B6 /* CalendarStoreLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000000000000000000B4 /* CalendarStoreLogic.swift */; };
+		AA00000000000000000000B7 /* CalendarServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000000000000000000B5 /* CalendarServices.swift */; };
+		AA00000000000000000000B9 /* HomeLayoutMigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000000000000000000B8 /* HomeLayoutMigration.swift */; };
+		AA00000000000000000000BB /* CalendarAppLabels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000000000000000000BA /* CalendarAppLabels.swift */; };
 		AA0000000000000000000077 /* GeoSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000076 /* GeoSearch.swift */; };
 		AA0000000000000000000079 /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000078 /* LocationService.swift */; };
 		AA0000000000000000000031 /* SpotifyAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000030 /* SpotifyAuth.swift */; };
@@ -87,6 +93,12 @@
 		AA0000000000000000000070 /* BrowserApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserApp.swift; sourceTree = "<group>"; };
 		AA0000000000000000000072 /* SettingsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsApp.swift; sourceTree = "<group>"; };
 		AA0000000000000000000074 /* WeatherScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherScreen.swift; sourceTree = "<group>"; };
+		AA00000000000000000000B0 /* CalendarPanelModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarPanelModels.swift; sourceTree = "<group>"; };
+		AA00000000000000000000B1 /* CalendarScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarScreen.swift; sourceTree = "<group>"; };
+		AA00000000000000000000B4 /* CalendarStoreLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarStoreLogic.swift; sourceTree = "<group>"; };
+		AA00000000000000000000B5 /* CalendarServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarServices.swift; sourceTree = "<group>"; };
+		AA00000000000000000000B8 /* HomeLayoutMigration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeLayoutMigration.swift; sourceTree = "<group>"; };
+		AA00000000000000000000BA /* CalendarAppLabels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarAppLabels.swift; sourceTree = "<group>"; };
 		AA0000000000000000000076 /* GeoSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeoSearch.swift; sourceTree = "<group>"; };
 		AA0000000000000000000078 /* LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
 		AA0000000000000000000030 /* SpotifyAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyAuth.swift; sourceTree = "<group>"; };
@@ -319,6 +331,12 @@
 				AA0000000000000000000070 /* BrowserApp.swift */,
 				AA0000000000000000000072 /* SettingsApp.swift */,
 				AA0000000000000000000074 /* WeatherScreen.swift */,
+				AA00000000000000000000B0 /* CalendarPanelModels.swift */,
+				AA00000000000000000000B1 /* CalendarScreen.swift */,
+				AA00000000000000000000B4 /* CalendarStoreLogic.swift */,
+				AA00000000000000000000B5 /* CalendarServices.swift */,
+				AA00000000000000000000B8 /* HomeLayoutMigration.swift */,
+				AA00000000000000000000BA /* CalendarAppLabels.swift */,
 				AA0000000000000000000076 /* GeoSearch.swift */,
 				AA0000000000000000000078 /* LocationService.swift */,
 			);
@@ -422,6 +440,12 @@
 				AA0000000000000000000071 /* BrowserApp.swift in Sources */,
 				AA0000000000000000000073 /* SettingsApp.swift in Sources */,
 				AA0000000000000000000075 /* WeatherScreen.swift in Sources */,
+				AA00000000000000000000B2 /* CalendarPanelModels.swift in Sources */,
+				AA00000000000000000000B3 /* CalendarScreen.swift in Sources */,
+				AA00000000000000000000B6 /* CalendarStoreLogic.swift in Sources */,
+				AA00000000000000000000B7 /* CalendarServices.swift in Sources */,
+				AA00000000000000000000B9 /* HomeLayoutMigration.swift in Sources */,
+				AA00000000000000000000BB /* CalendarAppLabels.swift in Sources */,
 				AA0000000000000000000077 /* GeoSearch.swift in Sources */,
 				AA0000000000000000000079 /* LocationService.swift in Sources */,
 				AA0000000000000000000031 /* SpotifyAuth.swift in Sources */,
@@ -496,6 +520,8 @@
 				INFOPLIST_KEY_NSAudioCaptureUsageDescription = "Quake4Mac listens to system audio to drive the beat-reactive RGB ring.";
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Runs AppleScript-based media and macro actions you explicitly enable.";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Shows your connected Bluetooth devices on the Quake panel.";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Quake4Mac reads your calendars to show today's events on the Quake panel.";
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "Quake4Mac reads your calendars to show today's events on the Quake panel.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Uses your location to show local weather on the Quake panel.";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -524,6 +550,8 @@
 				INFOPLIST_KEY_NSAudioCaptureUsageDescription = "Quake4Mac listens to system audio to drive the beat-reactive RGB ring.";
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Runs AppleScript-based media and macro actions you explicitly enable.";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Shows your connected Bluetooth devices on the Quake panel.";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Quake4Mac reads your calendars to show today's events on the Quake panel.";
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "Quake4Mac reads your calendars to show today's events on the Quake panel.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Uses your location to show local weather on the Quake panel.";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = (
