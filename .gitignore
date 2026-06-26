@@ -5,6 +5,7 @@ DerivedData/
 .DS_Store
 xcuserdata/
 *.xcuserdatad/
+/Config/Signing.local.xcconfig
 
 # Dev-only files (not needed to build the app)
 /Package.swift
