@@ -43,6 +43,27 @@ xcodebuild -project Quake4Mac.xcodeproj -scheme Quake4Mac -configuration Debug -
 
 The local command-line build is unsigned and does not require an Apple Developer account or Development Team ID. Release builds have hardened runtime enabled, but Developer ID signing/notarization are intentionally left for a later distribution step.
 
+### Local signed builds
+
+Personal Apple signing settings are intentionally kept out of the committed Xcode project. To build or run with your own Development Team locally:
+
+```bash
+cp Config/Signing.local.example.xcconfig Config/Signing.local.xcconfig
+```
+
+Then edit `Config/Signing.local.xcconfig` and set:
+
+```xcconfig
+DEVELOPMENT_TEAM = YOUR_TEAM_ID
+CODE_SIGN_STYLE = Manual
+CODE_SIGN_IDENTITY = Apple Development
+CODE_SIGN_IDENTITY[sdk=macosx*] = Apple Development
+```
+
+`Config/Signing.local.xcconfig` is ignored by git, so each developer can use their own Team ID and signing identity without changing `Quake4Mac.xcodeproj/project.pbxproj`.
+
+For signed macOS builds, Xcode must also be able to find a valid Apple Development signing certificate with a private key for that team in your Keychain. Use the certificate's Team ID / Organizational Unit (`OU`) as `DEVELOPMENT_TEAM`.
+
 Plug in the DK‑QUAKE — the app auto‑detects the panel by name/size, pins its UI to it, and starts reading the knob/touch over USB‑HID. The settings window opens on your regular monitor.
 
 You may be prompted to grant permissions depending on which features you use (e.g. Accessibility / Input Monitoring for global actions, System Audio Recording for music‑reactive lighting). Grant them in **System Settings → Privacy & Security**.
